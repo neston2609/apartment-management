@@ -84,6 +84,7 @@ CREATE TABLE expense_settings (
     electricity_price_per_unit  DECIMAL(10,2) NOT NULL DEFAULT 0,
     electricity_max_units       INTEGER NOT NULL DEFAULT 9999,
     invoice_footer_text         TEXT DEFAULT '',
+    contract_terms              TEXT DEFAULT '',
     created_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(apartment_id)

@@ -8,6 +8,7 @@
 const fs   = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
+const { DEFAULT_CONTRACT_TERMS } = require('./contractDefaults');
 
 const THAI_MONTHS = [
     'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน',
@@ -89,18 +90,12 @@ function generateContractPDF(t, stream) {
 
     doc.font('thai-bold').text('ข้อตกลงและเงื่อนไข');
     doc.font('thai').fontSize(10);
-    [
-        '1. ผู้เช่าตกลงชำระค่าเช่าภายในวันที่ 5 ของทุกเดือน',
-        '2. ผู้เช่าต้องรักษาทรัพย์สินภายในห้องพักให้อยู่ในสภาพดี',
-        '3. ห้ามนำสัตว์เลี้ยงทุกชนิดเข้าพักโดยไม่ได้รับอนุญาต',
-        '4. ห้ามประกอบกิจการที่ผิดกฎหมาย',
-        '5. การบอกเลิกสัญญาต้องแจ้งล่วงหน้าอย่างน้อย 30 วัน',
-        '6. ผู้เช่าต้องชำระค่าน้ำประปาและค่าไฟฟ้าตามมิเตอร์',
-        '7. ห้ามดัดแปลงต่อเติมห้องพักโดยไม่ได้รับอนุญาต',
-        '8. ผู้เช่าต้องส่งคืนห้องพักในสภาพเรียบร้อยเมื่อสิ้นสุดสัญญา',
-        '9. การกระทำใด ๆ ที่ขัดต่อสัญญาฉบับนี้ ผู้ให้เช่ามีสิทธิ์บอกเลิกสัญญาได้ทันที',
-        '10. คู่สัญญาทั้งสองฝ่ายได้อ่านและเข้าใจข้อตกลงทั้งหมดแล้ว',
-    ].forEach((line) => doc.text(line, { paragraphGap: 4 }));
+    // Use customized terms from settings if provided, otherwise fall back to defaults.
+    const customTerms = (t.contract_terms || '').trim();
+    const termLines = customTerms
+        ? customTerms.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
+        : DEFAULT_CONTRACT_TERMS;
+    termLines.forEach((line) => doc.text(line, { paragraphGap: 4 }));
     doc.moveDown(2);
 
     doc.fontSize(11);

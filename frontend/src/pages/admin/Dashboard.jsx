@@ -10,6 +10,16 @@ const STAT_LABELS = {
     rooms_misc:     'อื่น ๆ',
 };
 
+const ALL_STATUSES = ['occupied', 'caretaker', 'maintenance', 'common', 'vacant'];
+const STATUS_LABELS = {
+    occupied:    'มีผู้เช่า',
+    caretaker:   'ผู้ดูแล',
+    maintenance: 'ซ่อมบำรุง',
+    common:      'พื้นที่ส่วนกลาง',
+    vacant:      'ว่าง',
+};
+const DEFAULT_REVENUE_STATUSES = ['occupied', 'caretaker'];
+
 export default function Dashboard() {
     const now = new Date();
     const [month, setMonth] = useState(now.getMonth() + 1);
@@ -19,6 +29,11 @@ export default function Dashboard() {
     const [bills, setBills] = useState([]);
     const [loadingApts, setLoadingApts]   = useState(true);
     const [loadingBills, setLoadingBills] = useState(true);
+
+    // Status filter for revenue calculation (default: occupied + caretaker)
+    const [statuses, setStatuses] = useState(DEFAULT_REVENUE_STATUSES);
+    const toggleStatus = (s) =>
+        setStatuses((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
 
     // Apartments only need to load once
     useEffect(() => {
@@ -46,24 +61,24 @@ export default function Dashboard() {
         return t;
     }, [apts]);
 
-    // Revenue is computed only from bills whose room has an active tenant.
-    // The /api/bills response includes tenant_name (LEFT JOIN active tenant).
-    const occupiedBills = useMemo(
-        () => bills.filter((b) => b.tenant_name),
-        [bills]
+    // Revenue is computed only from bills whose room status is in the selected filter.
+    // The /api/bills response includes r.status (room status) via JOIN.
+    const filteredBills = useMemo(
+        () => bills.filter((b) => statuses.includes(b.status)),
+        [bills, statuses]
     );
 
     const breakdown = useMemo(() => {
-        const sum = (key) => occupiedBills.reduce((s, b) => s + Number(b[key] || 0), 0);
+        const sum = (key) => filteredBills.reduce((s, b) => s + Number(b[key] || 0), 0);
         return {
             water:   sum('water_cost'),
             elec:    sum('electricity_cost'),
             rent:    sum('rent_cost'),
             other:   sum('other_cost'),
             total:   sum('total_cost'),
-            count:   occupiedBills.length,
+            count:   filteredBills.length,
         };
-    }, [occupiedBills]);
+    }, [filteredBills]);
 
     const yearOptions = useMemo(() => {
         const cy = now.getFullYear();
@@ -110,12 +125,12 @@ export default function Dashboard() {
                 ))}
             </div>
 
-            {/* Total revenue (occupied rooms only) */}
+            {/* Total revenue (filtered by selected room statuses) */}
             <div className="bg-white rounded-lg border border-slate-200 p-5">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-3">
                     <div>
                         <p className="text-xs text-slate-500">
-                            รายได้รวม (เฉพาะห้องที่มีผู้เช่า)
+                            รายได้รวม (ตามสถานะห้องที่เลือก)
                         </p>
                         <p className="text-3xl font-bold text-brand-700 mt-1">
                             ฿ {fmtMoney(breakdown.total)}
@@ -125,6 +140,24 @@ export default function Dashboard() {
                         </p>
                     </div>
                     {loadingBills && <Spinner />}
+                </div>
+
+                {/* Status filter checkboxes */}
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                    <p className="text-xs text-slate-500 mb-2">เลือกสถานะห้องที่นำมาคำนวณรายได้:</p>
+                    <div className="flex flex-wrap gap-3 text-sm">
+                        {ALL_STATUSES.map((s) => (
+                            <label key={s} className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                                    checked={statuses.includes(s)}
+                                    onChange={() => toggleStatus(s)}
+                                />
+                                <span className="text-slate-700">{STATUS_LABELS[s]}</span>
+                            </label>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Breakdown */}

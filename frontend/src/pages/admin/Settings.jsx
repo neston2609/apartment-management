@@ -3,6 +3,21 @@ import toast from 'react-hot-toast';
 import api, { unwrap } from '../../utils/api';
 import Spinner from '../../components/common/Spinner';
 
+// Default rental contract terms (Thai) — used to pre-fill the textarea
+// when an apartment has not yet customised its terms.
+const DEFAULT_CONTRACT_TERMS = [
+    '1. ผู้เช่าตกลงชำระค่าเช่าภายในวันที่ 5 ของทุกเดือน',
+    '2. ผู้เช่าต้องรักษาทรัพย์สินภายในห้องพักให้อยู่ในสภาพดี',
+    '3. ห้ามนำสัตว์เลี้ยงทุกชนิดเข้าพักโดยไม่ได้รับอนุญาต',
+    '4. ห้ามประกอบกิจการที่ผิดกฎหมาย',
+    '5. การบอกเลิกสัญญาต้องแจ้งล่วงหน้าอย่างน้อย 30 วัน',
+    '6. ผู้เช่าต้องชำระค่าน้ำประปาและค่าไฟฟ้าตามมิเตอร์',
+    '7. ห้ามดัดแปลงต่อเติมห้องพักโดยไม่ได้รับอนุญาต',
+    '8. ผู้เช่าต้องส่งคืนห้องพักในสภาพเรียบร้อยเมื่อสิ้นสุดสัญญา',
+    '9. การกระทำใด ๆ ที่ขัดต่อสัญญาฉบับนี้ ผู้ให้เช่ามีสิทธิ์บอกเลิกสัญญาได้ทันที',
+    '10. คู่สัญญาทั้งสองฝ่ายได้อ่านและเข้าใจข้อตกลงทั้งหมดแล้ว',
+].join('\n');
+
 export default function Settings() {
     const [apts, setApts] = useState([]);
     const [aptId, setAptId] = useState('');
@@ -18,8 +33,21 @@ export default function Settings() {
 
     useEffect(() => {
         if (!aptId) return;
-        unwrap(api.get(`/settings/${aptId}`)).then((d) => setForm(d));
+        unwrap(api.get(`/settings/${aptId}`)).then((d) => {
+            // If the apartment has no custom contract terms yet, pre-fill the
+            // textarea with the default 10 rules so the admin can see/edit them.
+            const next = { ...d };
+            if (!next.contract_terms || !next.contract_terms.trim()) {
+                next.contract_terms = DEFAULT_CONTRACT_TERMS;
+            }
+            setForm(next);
+        });
     }, [aptId]);
+
+    const resetContractTerms = () => {
+        if (!form) return;
+        setForm({ ...form, contract_terms: DEFAULT_CONTRACT_TERMS });
+    };
 
     const submit = async (e) => {
         e.preventDefault();
@@ -35,7 +63,7 @@ export default function Settings() {
     if (!form) return <div className="grid place-items-center h-64"><Spinner /></div>;
 
     return (
-        <div className="max-w-2xl space-y-4">
+        <div className="max-w-3xl space-y-4">
             <h1 className="text-2xl font-bold text-slate-800">ตั้งค่า</h1>
 
             <div className="bg-white border border-slate-200 rounded-lg p-3 text-sm">
@@ -67,6 +95,24 @@ export default function Settings() {
                               value={form.invoice_footer_text || ''}
                               onChange={(e) => setForm({ ...form, invoice_footer_text: e.target.value })} />
                 </label>
+
+                <label className="block">
+                    <div className="flex items-center justify-between">
+                        <span className="text-slate-600">ข้อตกลงและเงื่อนไข (สัญญาเช่า)</span>
+                        <button type="button" onClick={resetContractTerms}
+                                className="text-xs text-brand-600 hover:underline">
+                            คืนค่าเริ่มต้น
+                        </button>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                        แต่ละบรรทัดคือ 1 ข้อ — บรรทัดที่ปรากฏที่นี่จะถูกพิมพ์ลงใน PDF สัญญาเช่า
+                    </p>
+                    <textarea rows={12}
+                              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 font-mono text-[13px] leading-relaxed"
+                              value={form.contract_terms || ''}
+                              onChange={(e) => setForm({ ...form, contract_terms: e.target.value })} />
+                </label>
+
                 <div className="flex justify-end">
                     <button type="submit" disabled={saving}
                             className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md disabled:opacity-50">

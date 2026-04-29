@@ -255,10 +255,12 @@ router.get('/:id/contract', authenticate, async (req, res) => {
             SELECT t.full_name, t.phone_number, t.national_id, t.move_in_date,
                    r.room_number, r.rental_price,
                    a.name AS apartment_name, a.address AS apartment_address,
-                   a.contact_number AS apartment_phone
+                   a.contact_number AS apartment_phone,
+                   es.contract_terms
             FROM tenants t
             LEFT JOIN rooms r ON r.room_id = t.room_id
             LEFT JOIN apartments a ON a.apartment_id = r.apartment_id
+            LEFT JOIN expense_settings es ON es.apartment_id = a.apartment_id
             WHERE t.tenant_id = $1
         `, [id]);
         if (!rows.length) return res.status(404).json({ error: 'Tenant not found' });

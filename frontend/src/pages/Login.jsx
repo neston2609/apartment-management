@@ -45,7 +45,9 @@ export default function Login() {
                     {['admin', 'tenant'].map((m) => (
                         <button key={m} type="button" onClick={() => setMode(m)}
                                 className={`flex-1 py-2 rounded-md transition ${
-                                    mode === m ? 'bg-white shadow text-brand-700 font-medium' : 'text-slate-500'
+                                    mode === m
+                                        ? 'bg-brand-700 shadow text-white font-semibold'
+                                        : 'text-slate-500 hover:text-slate-700'
                                 }`}>
                             {m === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้เช่า'}
                         </button>
