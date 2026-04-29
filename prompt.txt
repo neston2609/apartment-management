@@ -1,0 +1,72 @@
+Read CLAUDE.md carefully.
+
+Build the complete Apartment Management System following the Build Order in CLAUDE.md exactly.
+
+Generate complete working code for ALL 51 files in this order:
+
+PHASE 1 - DATABASE:
+1. database/schema.sql
+2. database/seed.sql
+3. database/migrate.js
+
+PHASE 2 - ROOT CONFIG:
+4. .gitignore
+5. .env.example
+6. .env
+7. package.json
+
+PHASE 3 - BACKEND:
+8.  backend/package.json
+9.  backend/server.js
+10. backend/config/database.js
+11. backend/middleware/auth.js
+12. backend/routes/auth.js
+13. backend/routes/apartments.js
+14. backend/routes/rooms.js
+15. backend/routes/tenants.js
+16. backend/routes/bills.js
+17. backend/routes/settings.js
+18. backend/utils/pdf.js
+
+PHASE 4 - FRONTEND:
+19. frontend/package.json
+20. frontend/tailwind.config.js
+21. frontend/postcss.config.js
+22. frontend/public/index.html
+23. frontend/src/index.js
+24. frontend/src/App.jsx
+25. frontend/src/context/AuthContext.jsx
+26. frontend/src/utils/api.js
+27. frontend/src/components/Layout.jsx
+28. frontend/src/components/Sidebar.jsx
+29. frontend/src/components/Navbar.jsx
+30. frontend/src/components/PrivateRoute.jsx
+31. frontend/src/components/common/Modal.jsx
+32. frontend/src/components/common/Table.jsx
+33. frontend/src/components/common/Badge.jsx
+34. frontend/src/components/common/Spinner.jsx
+35. frontend/src/components/common/Alert.jsx
+36. frontend/src/pages/Login.jsx
+37. frontend/src/pages/admin/Dashboard.jsx
+38. frontend/src/pages/admin/Apartments.jsx
+39. frontend/src/pages/admin/Rooms.jsx
+40. frontend/src/pages/admin/Tenants.jsx
+41. frontend/src/pages/admin/TenantForm.jsx
+42. frontend/src/pages/admin/Billing.jsx
+43. frontend/src/pages/admin/BillingForm.jsx
+44. frontend/src/pages/admin/Invoice.jsx
+45. frontend/src/pages/admin/Settings.jsx
+46. frontend/src/pages/tenant/TenantDashboard.jsx
+47. frontend/src/pages/tenant/TenantBills.jsx
+48. frontend/src/pages/tenant/TenantContract.jsx
+
+PHASE 5 - DEPLOYMENT:
+49. backend/Dockerfile
+50. frontend/Dockerfile
+51. docker-compose.yml
+
+Rules:
+- Generate COMPLETE code for every file (no placeholders)
+- Thai language for ALL UI text
+- Follow all business rules in CLAUDE.md exactly
+- Do not skip any file
