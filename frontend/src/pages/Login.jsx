@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api, { unwrap } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
-    const [mode, setMode] = useState('admin'); // 'admin' | 'tenant'
+    const [mode, setMode] = useState('admin');
     const [form, setForm] = useState({ username: '', password: '', national_id: '' });
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
@@ -22,7 +22,6 @@ export default function Login() {
             const data = await unwrap(api.post(url, body));
             login(data.token, data.user);
             toast.success('เข้าสู่ระบบสำเร็จ');
-            // Property managers go straight to the print page (only thing they can use)
             const u = data.user;
             const dest =
                 u.role === 'tenant'                              ? '/tenant/dashboard'
@@ -44,14 +43,10 @@ export default function Login() {
 
                 <div className="mt-6 flex bg-slate-100 rounded-lg p-1 text-sm">
                     {['admin', 'tenant'].map((m) => (
-                        <button
-                            key={m}
-                            type="button"
-                            onClick={() => setMode(m)}
-                            className={`flex-1 py-2 rounded-md transition ${
-                                mode === m ? 'bg-white shadow text-brand-700 font-medium' : 'text-slate-500'
-                            }`}
-                        >
+                        <button key={m} type="button" onClick={() => setMode(m)}
+                                className={`flex-1 py-2 rounded-md transition ${
+                                    mode === m ? 'bg-white shadow text-brand-700 font-medium' : 'text-slate-500'
+                                }`}>
                             {m === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้เช่า'}
                         </button>
                     ))}
@@ -61,39 +56,36 @@ export default function Login() {
                     {mode === 'admin' ? (
                         <div>
                             <label className="block text-sm font-medium text-slate-600">ชื่อผู้ใช้</label>
-                            <input
-                                type="text" required
-                                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                                value={form.username}
-                                onChange={(e) => setForm({ ...form, username: e.target.value })}
-                            />
+                            <input type="text" required
+                                   className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-brand-500"
+                                   value={form.username}
+                                   onChange={(e) => setForm({ ...form, username: e.target.value })} />
                         </div>
                     ) : (
                         <div>
                             <label className="block text-sm font-medium text-slate-600">เลขบัตรประชาชน</label>
-                            <input
-                                type="text" required
-                                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                                value={form.national_id}
-                                onChange={(e) => setForm({ ...form, national_id: e.target.value })}
-                            />
+                            <input type="text" required
+                                   className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-brand-500"
+                                   value={form.national_id}
+                                   onChange={(e) => setForm({ ...form, national_id: e.target.value })} />
                         </div>
                     )}
                     <div>
                         <label className="block text-sm font-medium text-slate-600">รหัสผ่าน</label>
-                        <input
-                            type="password" required
-                            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                            value={form.password}
-                            onChange={(e) => setForm({ ...form, password: e.target.value })}
-                        />
+                        <input type="password" required
+                               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-brand-500"
+                               value={form.password}
+                               onChange={(e) => setForm({ ...form, password: e.target.value })} />
                     </div>
-                    <button
-                        type="submit" disabled={loading}
-                        className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-md font-medium disabled:opacity-50"
-                    >
+                    <button type="submit" disabled={loading}
+                            className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-md font-medium disabled:opacity-50">
                         {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
                     </button>
+                    <div className="text-right text-sm">
+                        <Link to="/forgot-password" className="text-brand-600 hover:underline">
+                            ลืมรหัสผ่าน?
+                        </Link>
+                    </div>
                 </form>
             </div>
         </div>

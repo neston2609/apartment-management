@@ -7,6 +7,8 @@
  */
 const router = require('express').Router();
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
+const { sendMail, getAppBaseUrl } = require('../utils/mailer');
 const { body, validationResult } = require('express-validator');
 
 const db = require('../config/database');
@@ -196,6 +198,108 @@ router.put(
         } catch (err) {
             console.error('[auth/change-password]', err);
             return res.status(500).json({ error: 'Failed to change password' });
+        }
+    }
+);
+
+
+// ---------- Forgot password (sends email) ----------
+router.post('/forgot-password', async (req, res) => {
+    try {
+        const identifier = (req.body?.identifier || '').toString().trim();
+        if (!identifier) return res.status(400).json({ error: 'Missing identifier' });
+
+        // Look up admin by username or email, OR tenant by national_id or email.
+        const admin = (await db.query(
+            `SELECT admin_id AS id, email, full_name, username
+             FROM admin_users WHERE (LOWER(email) = LOWER($1) OR username = $1)
+               AND email IS NOT NULL AND email <> ''`,
+            [identifier]
+        )).rows[0];
+        const tenant = !admin ? (await db.query(
+            `SELECT tenant_id AS id, email, full_name, national_id
+             FROM tenants WHERE (LOWER(email) = LOWER($1) OR national_id = $1)
+               AND is_active = TRUE AND email IS NOT NULL AND email <> ''`,
+            [identifier]
+        )).rows[0] : null;
+
+        if (!admin && !tenant) {
+            // Don't leak which accounts exist
+            return res.json({ data: { sent: true } });
+        }
+
+        const userKind = admin ? 'admin' : 'tenant';
+        const user     = admin || tenant;
+
+        const token = crypto.randomBytes(32).toString('hex');
+        const expires = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
+        await db.query(
+            `INSERT INTO password_reset_tokens (token, user_kind, user_id, expires_at)
+             VALUES ($1, $2, $3, $4)`,
+            [token, userKind, user.id, expires]
+        );
+
+        const base = await getAppBaseUrl();
+        const link = `${base}/reset-password?token=${token}`;
+        try {
+            await sendMail({
+                to: user.email,
+                subject: 'รีเซ็ตรหัสผ่าน — ระบบจัดการอพาร์ทเมนต์',
+                html: `
+                    <p>สวัสดี ${user.full_name || user.username || ''}</p>
+                    <p>มีคำขอรีเซ็ตรหัสผ่านสำหรับบัญชีของคุณ คลิกลิงก์ด้านล่างเพื่อตั้งรหัสผ่านใหม่ (ลิงก์มีอายุ 1 ชั่วโมง):</p>
+                    <p><a href="${link}">${link}</a></p>
+                    <p>หากคุณไม่ได้ขอรีเซ็ต โปรดเพิกเฉยต่ออีเมลฉบับนี้</p>
+                `,
+            });
+        } catch (mailErr) {
+            console.error('[auth/forgot-password] mail error:', mailErr.message);
+            return res.status(500).json({ error: 'ส่งอีเมลไม่สำเร็จ — โปรดให้ผู้ดูแลระบบตรวจสอบการตั้งค่า SMTP' });
+        }
+        return res.json({ data: { sent: true } });
+    } catch (err) {
+        console.error('[auth/forgot-password]', err);
+        return res.status(500).json({ error: 'Failed' });
+    }
+});
+
+// ---------- Reset password using token ----------
+router.post('/reset-password',
+    body('token').isString().notEmpty(),
+    body('new_password').isString().isLength({ min: 6 }),
+    async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+
+        try {
+            const { token, new_password } = req.body;
+            const { rows } = await db.query(
+                `SELECT token_id, user_kind, user_id, expires_at, used_at
+                 FROM password_reset_tokens WHERE token = $1`,
+                [token]
+            );
+            if (!rows.length) return res.status(400).json({ error: 'ลิงก์ไม่ถูกต้อง' });
+            const t = rows[0];
+            if (t.used_at)                       return res.status(400).json({ error: 'ลิงก์นี้ถูกใช้ไปแล้ว' });
+            if (new Date(t.expires_at) < new Date()) return res.status(400).json({ error: 'ลิงก์หมดอายุ' });
+
+            const hash = await bcrypt.hash(new_password, SALT_ROUNDS);
+            const tbl = t.user_kind === 'admin' ? 'admin_users' : 'tenants';
+            const id  = t.user_kind === 'admin' ? 'admin_id'   : 'tenant_id';
+
+            const client = await db.getClient();
+            try {
+                await client.query('BEGIN');
+                await client.query(`UPDATE ${tbl} SET password_hash = $1, updated_at = NOW() WHERE ${id} = $2`,
+                                   [hash, t.user_id]);
+                await client.query(`UPDATE password_reset_tokens SET used_at = NOW() WHERE token_id = $1`, [t.token_id]);
+                await client.query('COMMIT');
+            } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
+
+            return res.json({ data: { reset: true } });
+        } catch (err) {
+            console.error('[auth/reset-password]', err);
+            return res.status(500).json({ error: 'Failed' });
         }
     }
 );

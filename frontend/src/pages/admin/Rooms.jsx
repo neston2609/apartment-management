@@ -27,7 +27,7 @@ export default function Rooms() {
     const [rooms, setRooms] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(null);
-    const [form, setForm] = useState({ rental_price: 0, status: 'vacant', room_number: '' });
+    const [form, setForm] = useState({ rental_price: 0, status: 'vacant', room_number: '', notes: '' });
 
     const [bulkOpen, setBulkOpen] = useState(false);
     const [bulkFloor, setBulkFloor] = useState(1);
@@ -59,8 +59,9 @@ export default function Rooms() {
         setEditing(room);
         setForm({
             rental_price: room.rental_price,
-            status: room.status,
-            room_number: room.room_number,
+            status:       room.status,
+            room_number:  room.room_number,
+            notes:        room.notes || '',
         });
     };
 
@@ -98,7 +99,7 @@ export default function Rooms() {
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800">ห้องพัก</h1>
                     <p className="text-xs text-slate-500 mt-1">
-                        คลิกที่ห้องเพื่อ <strong>กำหนดราคา/แก้ไขเลขห้อง</strong> หรือใช้ปุ่ม "ปรับราคาทั้งชั้น" เพื่อตั้งครั้งเดียว
+                        คลิกที่ห้องเพื่อ <strong>กำหนดราคา/แก้ไขเลขห้อง/หมายเหตุ</strong> หรือใช้ปุ่ม "ปรับราคาทั้งชั้น"
                     </p>
                 </div>
                 <button onClick={() => setBulkOpen(true)}
@@ -112,16 +113,18 @@ export default function Rooms() {
                     <h2 className="font-semibold text-slate-700 mb-3">ชั้น {floor}</h2>
                     <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                         {list.map((r) => (
-                            <button
-                                key={r.room_id}
-                                onClick={() => startEdit(r)}
-                                className={`border rounded-lg p-3 text-left transition hover:shadow ${STATUS_COLORS[r.status]}`}
-                            >
+                            <button key={r.room_id} onClick={() => startEdit(r)}
+                                    className={`border rounded-lg p-3 text-left transition hover:shadow ${STATUS_COLORS[r.status]}`}>
                                 <div className="font-bold text-lg">{r.room_number}</div>
                                 <div className="mt-1"><Badge status={r.status} /></div>
                                 <div className="text-xs mt-1">฿ {fmtMoney(r.rental_price)}</div>
                                 {r.tenant_name && (
                                     <div className="text-xs mt-1 truncate" title={r.tenant_name}>{r.tenant_name}</div>
+                                )}
+                                {r.notes && (
+                                    <div className="text-[11px] mt-1 italic truncate text-slate-600" title={r.notes}>
+                                        ✎ {r.notes}
+                                    </div>
                                 )}
                             </button>
                         ))}
@@ -129,17 +132,15 @@ export default function Rooms() {
                 </div>
             ))}
 
-            <Modal
-                open={!!editing}
-                title={editing ? `แก้ไขห้อง ${editing.room_number}` : ''}
-                onClose={() => setEditing(null)}
-                footer={
-                    <>
-                        <button onClick={() => setEditing(null)} className="px-3 py-1.5 text-sm text-slate-600">ยกเลิก</button>
-                        <button onClick={submit} className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md">บันทึก</button>
-                    </>
-                }
-            >
+            <Modal open={!!editing}
+                   title={editing ? `แก้ไขห้อง ${editing.room_number}` : ''}
+                   onClose={() => setEditing(null)}
+                   footer={
+                       <>
+                           <button onClick={() => setEditing(null)} className="px-3 py-1.5 text-sm text-slate-600">ยกเลิก</button>
+                           <button onClick={submit} className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md">บันทึก</button>
+                       </>
+                   }>
                 <div className="space-y-3 text-sm">
                     <label className="block">
                         <span className="text-slate-600">เลขห้อง</span>
@@ -147,9 +148,7 @@ export default function Rooms() {
                                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
                                value={form.room_number || ''}
                                onChange={(e) => setForm({ ...form, room_number: e.target.value })} />
-                        <span className="text-xs text-slate-500">
-                            ต้องไม่ซ้ำกับห้องอื่นในอพาร์ทเมนต์เดียวกัน
-                        </span>
+                        <span className="text-xs text-slate-500">ต้องไม่ซ้ำกับห้องอื่นในอพาร์ทเมนต์เดียวกัน</span>
                     </label>
                     <label className="block">
                         <span className="text-slate-600">ราคาเช่า (บาท/เดือน)</span>
@@ -166,20 +165,26 @@ export default function Rooms() {
                             {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                         </select>
                     </label>
+                    <label className="block">
+                        <span className="text-slate-600">หมายเหตุ</span>
+                        <textarea rows={3}
+                                  className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                                  placeholder="เช่น ห้องน้ำต้องซ่อม / กุญแจสำรอง / โน้ตอื่น ๆ"
+                                  value={form.notes || ''}
+                                  onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                    </label>
                 </div>
             </Modal>
 
-            <Modal
-                open={bulkOpen}
-                title="ปรับราคาห้องทั้งชั้น"
-                onClose={() => setBulkOpen(false)}
-                footer={
-                    <>
-                        <button onClick={() => setBulkOpen(false)} className="px-3 py-1.5 text-sm text-slate-600">ยกเลิก</button>
-                        <button onClick={submitBulk} className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md">บันทึก</button>
-                    </>
-                }
-            >
+            <Modal open={bulkOpen}
+                   title="ปรับราคาห้องทั้งชั้น"
+                   onClose={() => setBulkOpen(false)}
+                   footer={
+                       <>
+                           <button onClick={() => setBulkOpen(false)} className="px-3 py-1.5 text-sm text-slate-600">ยกเลิก</button>
+                           <button onClick={submitBulk} className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md">บันทึก</button>
+                       </>
+                   }>
                 <div className="space-y-3 text-sm">
                     <label className="block">
                         <span className="text-slate-600">ชั้น</span>

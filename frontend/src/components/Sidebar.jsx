@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
     HomeIcon, BuildingOffice2Icon, RectangleStackIcon,
     UsersIcon, DocumentTextIcon, PrinterIcon, Cog6ToothIcon,
-    UserGroupIcon,
+    UserGroupIcon, ServerIcon, IdentificationIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 
@@ -16,7 +16,8 @@ const ALL_ADMIN_LINKS = [
 ];
 
 const SUPER_ONLY_LINKS = [
-    { to: '/admin/users',      label: 'จัดการผู้ใช้',      icon: UserGroupIcon },
+    { to: '/admin/users',           label: 'จัดการผู้ใช้',  icon: UserGroupIcon },
+    { to: '/admin/system-settings', label: 'ตั้งค่าระบบ',   icon: ServerIcon },
 ];
 
 const PROPERTY_MANAGER_LINKS = [
@@ -24,9 +25,10 @@ const PROPERTY_MANAGER_LINKS = [
 ];
 
 const TENANT_LINKS = [
-    { to: '/tenant/dashboard', label: 'หน้าหลัก',         icon: HomeIcon },
-    { to: '/tenant/bills',     label: 'ใบแจ้งหนี้ของฉัน',  icon: DocumentTextIcon },
-    { to: '/tenant/contract',  label: 'สัญญาเช่า',        icon: RectangleStackIcon },
+    { to: '/tenant/dashboard', label: 'หน้าหลัก',           icon: HomeIcon },
+    { to: '/tenant/bills',     label: 'ใบแจ้งหนี้ของฉัน',    icon: DocumentTextIcon },
+    { to: '/tenant/contract',  label: 'สัญญาเช่า',          icon: RectangleStackIcon },
+    { to: '/tenant/profile',   label: 'แก้ไขข้อมูลส่วนตัว',  icon: IdentificationIcon },
 ];
 
 export default function Sidebar({ tenantMode = false }) {

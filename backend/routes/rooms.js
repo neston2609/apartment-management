@@ -51,20 +51,21 @@ router.get('/:id', async (req, res) => {
 });
 
 // ---------- Update room price/status/number ----------
-router.put('/:id', fullAdmin, async (req, res) => {
+router.put('/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
-        const { rental_price, status, room_number } = req.body;
+        const { rental_price, status, room_number, notes } = req.body;
         const trimmed = (room_number ?? '').toString().trim();
         const { rows } = await db.query(
             `UPDATE rooms
              SET rental_price = COALESCE($1, rental_price),
                  status       = COALESCE($2, status),
                  room_number  = COALESCE(NULLIF($3, ''), room_number),
+                 notes        = COALESCE($5, notes),
                  updated_at   = NOW()
              WHERE room_id = $4
              RETURNING *`,
-            [rental_price ?? null, status || null, trimmed, id]
+            [rental_price ?? null, status || null, trimmed, id, notes ?? null]
         );
         if (!rows.length) return res.status(404).json({ error: 'Room not found' });
         return res.json({ data: rows[0] });
