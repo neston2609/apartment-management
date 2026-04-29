@@ -1,162 +1,193 @@
-# CLAUDE.md - Apartment Management System
+# CLAUDE.md — Apartment Management System
 
-## AI Model Configuration
-- Model: qwen2.5-coder:32b (via Ollama)
-- Base URL: http://localhost:11434/v1
-- Base directory: /G/ollama/apartment-management-system
----
+This file is the **complete requirement & design specification** for a working full-stack apartment management application. It is intended to be self-contained: an LLM coding agent (e.g. Claude Cowork) should be able to read this file and reproduce the system end-to-end without needing the original codebase.
 
-## Project Overview
-A complete full-stack **Apartment Management System** supporting:
-- Multiple apartment management
-- Room tracking and billing
-- Tenant management with PDF contracts
-- Water/electricity meter billing
-- PDF invoice generation (A4 & A5, Thai language)
-- Admin and Tenant login roles
+The original implementation lives at `G:\ollama\apartment-management-system` (Windows host). This document describes what to build, not how the existing files happen to be arranged.
 
 ---
 
-## Tech Stack
-| Layer      | Technology                          |
-|------------|-------------------------------------|
-| Backend    | Node.js + Express.js (port 5000)    |
-| Frontend   | React.js + TailwindCSS (port 3000)  |
-| Database   | PostgreSQL (external host)          |
-| PDF        | PDFKit (backend)                    |
-| Auth       | JWT (admin & tenant roles)          |
-| Dev Tools  | concurrently, nodemon, dotenv       |
+## 1. Product Summary
+
+A web application for managing rental apartments in Thailand. The UI is fully Thai (Buddhist Era dates, Thai labels). Two main user types log in:
+
+- **Admin users** (three sub-roles) manage apartments, rooms, tenants, billing, and PDF output.
+- **Tenants** see their own bills, contract, and profile.
+
+Core capabilities the system must support:
+
+- Manage multiple apartments, each with its own rooms, expense settings, and contract terms.
+- Track each room's price, status, occupancy, and free-text notes.
+- Manage tenants (create, edit, move-out) with bcrypt-hashed login passwords.
+- Generate monthly bills from water + electricity meter readings, with rollover support.
+- Bulk-import meter readings from an Excel sheet.
+- Print Thai or English PDF invoices (A4 / A5 landscape) — single bill or many bills in one file.
+- Print a Thai PDF rental contract whose **ข้อตกลงและเงื่อนไข** (terms) are configurable per apartment.
+- Three-tier admin RBAC (super admin / admin / property manager).
+- Forgot-password flow that emails a one-time reset link via SMTP configured in-app.
+- Dashboard with selectable room-status filter for revenue aggregation.
 
 ---
 
-## Database Connection
-Host: neston.thddns.net
-Port: 2009
-User: postgres
-Password: LEpooh2901#
-Database: apartment_db
+## 2. Tech Stack
+
+| Layer       | Technology                                                       |
+|-------------|------------------------------------------------------------------|
+| Backend     | Node.js 20 + Express 4 (port 5000)                               |
+| Frontend    | React 18 + react-router 6 + TailwindCSS 3 (port 3000)            |
+| Database    | PostgreSQL (external host)                                       |
+| PDF         | PDFKit (with Sarabun TTF for Thai)                               |
+| Auth        | JWT (`jsonwebtoken`), bcrypt (salt rounds = 10)                  |
+| Validation  | `express-validator`                                              |
+| Email       | `nodemailer` (SMTP from DB-stored config)                        |
+| Excel       | `xlsx` (frontend-side parsing)                                   |
+| HTTP client | `axios` (with token + 401 interceptors)                          |
+| Icons       | `@heroicons/react`                                               |
+| Toasts      | `react-hot-toast`                                                |
+| Dev tools   | `concurrently`, `nodemon`, `dotenv`                              |
+| Deployment  | Docker (multi-stage), `docker-compose`, GitHub Actions optional  |
+
+Fonts: load `IBM Plex Sans Thai` and `Sarabun` from Google Fonts in the frontend; the backend ships `Sarabun-Regular.ttf` and `Sarabun-Bold.ttf` under `backend/utils/fonts/` for PDFKit. If the TTFs are missing, fall back to Helvetica.
+
+Brand color (used widely; defined in `tailwind.config.js`):
+
+```
+brand: { 50: '#eff6ff', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' }
+```
 
 ---
 
-## Project Structure
+## 3. Repository Layout
+
+```
 apartment-management-system/
 ├── CLAUDE.md
-├── package.json # root scripts (concurrently)
-├── .env # actual env vars (gitignored)
-├── .env.example # template
-├── .gitignore
+├── README.md, DEPLOY.md
+├── package.json                      # root scripts via concurrently
 ├── docker-compose.yml
+├── .env, .env.example, .env.development, .env.production.example
+├── .github/workflows/deploy.yml
+│
 ├── database/
-│ ├── schema.sql # full DB schema
-│ ├── seed.sql # sample data
-│ └── migrate.js # migration runner (Node)
+│   ├── bootstrap.sql                 # creates apartment_db if missing
+│   ├── schema.sql                    # full schema (DROP + CREATE)
+│   ├── seed.sql                      # static seed (apartment + rooms + settings)
+│   ├── seed.js                       # bcrypt-aware seeding for admin + tenants + bills
+│   ├── migrate.js                    # runs schema.sql
+│   ├── import-csv.js                 # optional CSV import helper
+│   ├── diagnose.js, check-admin.js   # diagnostic CLIs
+│   ├── migrate-001-add-role.sql      # add admin_users.role
+│   ├── migrate-002-rooms-and-system.sql  # rooms.notes, tenants.address, system_settings, password_reset_tokens
+│   └── migrations/001_add_contract_terms.sql
+│
 ├── backend/
-│ ├── package.json
-│ ├── server.js # Express entry point
-│ ├── config/
-│ │ └── database.js # pg Pool config
-│ ├── middleware/
-│ │ └── auth.js # JWT verify, role guards
-│ ├── routes/
-│ │ ├── auth.js # POST /auth/login, /auth/tenant/login
-│ │ ├── apartments.js # CRUD apartments + rooms + settings
-│ │ ├── rooms.js # GET/PUT rooms
-│ │ ├── tenants.js # CRUD tenants + moveout + contract PDF
-│ │ ├── bills.js # CRUD bills + meter readings + PDF
-│ │ └── settings.js # expense settings
-│ └── utils/
-│ └── pdf.js # PDFKit: contract A4, invoice A4/A5
+│   ├── package.json
+│   ├── Dockerfile
+│   ├── server.js                     # Express bootstrap (helmet, cors, json, routes, error handler)
+│   ├── config/database.js            # pg Pool (with optional SSL)
+│   ├── middleware/auth.js            # authenticate, adminOnly, tenantOnly, superAdminOnly, requireAdminRoles, signToken
+│   ├── routes/
+│   │   ├── auth.js                   # /api/auth/*
+│   │   ├── apartments.js             # /api/apartments/*
+│   │   ├── rooms.js                  # /api/rooms/*
+│   │   ├── tenants.js                # /api/tenants/*
+│   │   ├── bills.js                  # /api/bills/*
+│   │   ├── settings.js               # /api/settings/:apt
+│   │   ├── users.js                  # /api/users/*  (super-admin)
+│   │   └── system-settings.js        # /api/system-settings/* (super-admin)
+│   └── utils/
+│       ├── pdf.js                    # contract + invoice (Thai/English) + bulk
+│       ├── contractDefaults.js       # DEFAULT_CONTRACT_TERMS
+│       ├── mailer.js                 # SMTP via system_settings
+│       └── fonts/                    # Sarabun-Regular.ttf, Sarabun-Bold.ttf
+│
 └── frontend/
-├── package.json
-├── tailwind.config.js
-├── postcss.config.js
-└── src/
-├── index.js
-├── App.jsx # routes: admin & tenant
-├── context/
-│ └── AuthContext.jsx # JWT storage, login/logout
-├── utils/
-│ └── api.js # axios instance + interceptors
-├── components/
-│ ├── Layout.jsx # admin shell (sidebar + navbar)
-│ ├── Sidebar.jsx
-│ ├── Navbar.jsx
-│ ├── PrivateRoute.jsx # role-based route guard
-│ └── common/
-│ ├── Modal.jsx
-│ ├── Table.jsx
-│ ├── Badge.jsx
-│ ├── Spinner.jsx
-│ └── Alert.jsx
-└── pages/
-├── Login.jsx # shared login page
-├── admin/
-│ ├── Dashboard.jsx # stats cards + charts
-│ ├── Apartments.jsx # list + create + edit apartments
-│ ├── Rooms.jsx # room grid + status + price editor
-│ ├── Tenants.jsx # tenant list + add + moveout
-│ ├── TenantForm.jsx # add/edit tenant form
-│ ├── Billing.jsx # billing list + create/edit bill
-│ ├── BillingForm.jsx # meter readings + cost calc
-│ ├── Invoice.jsx # PDF preview + download A4/A5
-│ └── Settings.jsx # expense settings per apartment
-└── tenant/
-├── TenantDashboard.jsx # tenant home
-├── TenantBills.jsx # bill history
-└── TenantContract.jsx # view/download contract PDF
+    ├── package.json, Dockerfile
+    ├── tailwind.config.js, postcss.config.js
+    ├── public/index.html             # loads Google Fonts (Plex Thai + Sarabun)
+    └── src/
+        ├── index.js, index.css
+        ├── App.jsx                   # Routes (admin, tenant, public)
+        ├── context/AuthContext.jsx   # localStorage-backed JWT + user
+        ├── utils/api.js              # axios instance + helpers (THAI_MONTHS, thaiYear, fmtMoney, fmtThaiDate, unwrap)
+        ├── components/
+        │   ├── Layout.jsx, Sidebar.jsx, Navbar.jsx
+        │   ├── PrivateRoute.jsx, ChangePasswordModal.jsx
+        │   └── common/{Modal,Table,Badge,Spinner,Alert}.jsx
+        └── pages/
+            ├── Login.jsx, ForgotPassword.jsx, ResetPassword.jsx
+            ├── admin/{Dashboard,Apartments,Rooms,Tenants,TenantForm,
+            │           Billing,BillingForm,BillingImport,Invoice,
+            │           Settings,Users,SystemSettings}.jsx
+            └── tenant/{TenantDashboard,TenantBills,TenantContract,TenantProfile}.jsx
+```
 
 ---
 
-## Environment Variables (.env)
-Database
-DB_HOST=neston.thddns.net
-DB_PORT=2009
-DB_USER=postgres
-DB_PASSWORD=LEpooh2901#
-DB_NAME=apartment_db
+## 4. Environment Variables
 
-JWT
-JWT_SECRET=your_super_secret_jwt_key_change_in_production_min_32chars
+`.env` at the repo root (read by both `backend/server.js` and `database/*.js` via `dotenv` with explicit path = repo root).
+
+```
+# Database
+DB_HOST=...
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=...
+DB_NAME=apartment_db
+DB_SSL=false                  # 'true' to enable rejectUnauthorized:false SSL
+
+# JWT
+JWT_SECRET=please_change_to_a_long_random_string_minimum_32_chars
 JWT_EXPIRES_IN=7d
 
-Server
+# Server
 PORT=5000
 NODE_ENV=development
 
-Frontend (used in React)
+# Frontend (Create React App reads at build time)
 REACT_APP_API_URL=http://localhost:5000/api
+```
+
+Frontend `package.json` has `"proxy": "http://localhost:5000"` so dev mode also works without `REACT_APP_API_URL`.
+
+SMTP credentials are **NOT** in `.env`. They live in the `system_settings` table and are edited via the in-app Super-Admin UI; the change takes effect on the next mail send (no restart).
 
 ---
 
-## Root package.json Scripts
+## 5. Root Scripts (`package.json`)
+
 ```json
 {
-  "name": "apartment-management-system",
-  "version": "1.0.0",
   "scripts": {
-    "install:all":  "npm install && cd backend && npm install && cd ../frontend && npm install",
-    "dev":          "concurrently \"cd backend && npm run dev\" \"cd frontend && npm start\"",
-    "build":        "cd frontend && npm run build",
-    "start":        "cd backend && npm start",
-    "db:migrate":   "node database/migrate.js",
-    "db:seed":      "node database/seed.js"
-  },
-  "devDependencies": {
-    "concurrently": "^8.2.0"
+    "install:all":   "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "dev":           "concurrently \"cd backend && npm run dev\" \"cd frontend && npm start\"",
+    "build":         "cd frontend && npm run build",
+    "start":         "cd backend && npm start",
+    "db:migrate":    "node database/migrate.js",
+    "db:seed":       "node database/seed.js",
+    "db:diagnose":   "node database/diagnose.js",
+    "db:check-admin":"node database/check-admin.js"
   }
 }
 ```
 
-## Database Schema (Full Specification)
-ENUM Types
-CREATE TYPE room_status AS ENUM (
-    'occupied',
-    'vacant',
-    'maintenance',
-    'common',
-    'caretaker'
-);
-Table: apartments
+The backend's `npm run dev` uses `nodemon server.js`. The frontend uses CRA (`react-scripts start`); on Windows the start script sets `HOST=localhost` and `BROWSER=none`.
+
+---
+
+## 6. Database Schema (Postgres)
+
+`database/schema.sql` is the canonical, drop-and-recreate definition. Migration files apply additive changes for already-deployed databases (use `IF NOT EXISTS`).
+
+### 6.1 Enum
+
+```sql
+CREATE TYPE room_status AS ENUM ('occupied','vacant','maintenance','common','caretaker');
+```
+
+### 6.2 Tables
+
+```sql
 CREATE TABLE apartments (
     apartment_id    SERIAL PRIMARY KEY,
     name            VARCHAR(255) NOT NULL,
@@ -164,52 +195,55 @@ CREATE TABLE apartments (
     contact_number  VARCHAR(20),
     floors_count    INTEGER NOT NULL DEFAULT 1,
     rooms_per_floor INTEGER NOT NULL DEFAULT 1,
-    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
-Table: rooms
+
 CREATE TABLE rooms (
     room_id         SERIAL PRIMARY KEY,
     apartment_id    INTEGER NOT NULL REFERENCES apartments(apartment_id) ON DELETE CASCADE,
     floor_number    INTEGER NOT NULL,
     room_sequence   INTEGER NOT NULL,
-    room_number     VARCHAR(20) NOT NULL,   -- auto: floor + LPAD(seq,2,'0')
+    room_number     VARCHAR(20) NOT NULL,        -- floor + LPAD(seq,2,'0')
     rental_price    DECIMAL(10,2) NOT NULL DEFAULT 0,
-    status          room_status NOT NULL DEFAULT 'vacant',
-    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    status          room_status   NOT NULL DEFAULT 'vacant',
+    notes           TEXT,                        -- admin free text per room
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(apartment_id, room_number)
 );
-Table: tenants
+
 CREATE TABLE tenants (
     tenant_id       SERIAL PRIMARY KEY,
     room_id         INTEGER REFERENCES rooms(room_id) ON DELETE SET NULL,
     full_name       VARCHAR(255) NOT NULL,
     phone_number    VARCHAR(20),
-    national_id     VARCHAR(20) UNIQUE NOT NULL,
+    national_id     VARCHAR(20)  UNIQUE NOT NULL,
     move_in_date    DATE NOT NULL,
     move_out_date   DATE,
     email           VARCHAR(255),
-    password_hash   VARCHAR(255) NOT NULL,  -- default: bcrypt(national_id)
+    password_hash   VARCHAR(255) NOT NULL,        -- bcrypt(national_id) by default
+    address         TEXT,                         -- separate from notes
     notes           TEXT,
     is_active       BOOLEAN DEFAULT TRUE,
-    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
-Table: expense_settings
+
 CREATE TABLE expense_settings (
     setting_id                  SERIAL PRIMARY KEY,
     apartment_id                INTEGER NOT NULL REFERENCES apartments(apartment_id) ON DELETE CASCADE,
     water_price_per_unit        DECIMAL(10,2) NOT NULL DEFAULT 0,
-    water_max_units             INTEGER NOT NULL DEFAULT 9999,
+    water_max_units             INTEGER       NOT NULL DEFAULT 9999,
     electricity_price_per_unit  DECIMAL(10,2) NOT NULL DEFAULT 0,
-    electricity_max_units       INTEGER NOT NULL DEFAULT 9999,
+    electricity_max_units       INTEGER       NOT NULL DEFAULT 9999,
     invoice_footer_text         TEXT DEFAULT '',
-    created_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    contract_terms              TEXT DEFAULT '', -- per-apartment override; one rule per line
+    created_at                  TIMESTAMPTZ DEFAULT NOW(),
+    updated_at                  TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(apartment_id)
 );
-Table: meter_readings
+
 CREATE TABLE meter_readings (
     reading_id                  SERIAL PRIMARY KEY,
     room_id                     INTEGER NOT NULL REFERENCES rooms(room_id) ON DELETE CASCADE,
@@ -221,11 +255,11 @@ CREATE TABLE meter_readings (
     electricity_units_current   DECIMAL(10,2) NOT NULL DEFAULT 0,
     rollover_water              BOOLEAN DEFAULT FALSE,
     rollover_electricity        BOOLEAN DEFAULT FALSE,
-    created_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at                  TIMESTAMPTZ DEFAULT NOW(),
+    updated_at                  TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(room_id, month, year)
 );
-Table: bills
+
 CREATE TABLE bills (
     bill_id          SERIAL PRIMARY KEY,
     room_id          INTEGER NOT NULL REFERENCES rooms(room_id) ON DELETE CASCADE,
@@ -236,11 +270,11 @@ CREATE TABLE bills (
     rent_cost        DECIMAL(10,2) NOT NULL DEFAULT 0,
     other_cost       DECIMAL(10,2) NOT NULL DEFAULT 0,
     total_cost       DECIMAL(10,2) NOT NULL DEFAULT 0,
-    created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at       TIMESTAMPTZ DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(room_id, month, year)
 );
-Table: admin_users
+
 CREATE TABLE admin_users (
     admin_id        SERIAL PRIMARY KEY,
     username        VARCHAR(100) UNIQUE NOT NULL,
@@ -249,10 +283,33 @@ CREATE TABLE admin_users (
     email           VARCHAR(255),
     apartment_id    INTEGER REFERENCES apartments(apartment_id),
     is_super_admin  BOOLEAN DEFAULT FALSE,
-    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    role            VARCHAR(50) NOT NULL DEFAULT 'admin',  -- super_admin | admin | property_manager
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
-Indexes
+
+-- Key/value config (SMTP, app base URL, etc.)
+CREATE TABLE system_settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Single-use tokens for forgot-password
+CREATE TABLE password_reset_tokens (
+    token_id    SERIAL PRIMARY KEY,
+    token       VARCHAR(128) UNIQUE NOT NULL,
+    user_kind   VARCHAR(20)  NOT NULL,            -- 'admin' | 'tenant'
+    user_id     INTEGER      NOT NULL,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    used_at     TIMESTAMPTZ,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 6.3 Indexes
+
+```sql
 CREATE INDEX idx_rooms_apartment_id        ON rooms(apartment_id);
 CREATE INDEX idx_rooms_status              ON rooms(status);
 CREATE INDEX idx_tenants_room_id           ON tenants(room_id);
@@ -263,506 +320,903 @@ CREATE INDEX idx_meter_readings_month_year ON meter_readings(month, year);
 CREATE INDEX idx_bills_room_id             ON bills(room_id);
 CREATE INDEX idx_bills_month_year          ON bills(month, year);
 CREATE INDEX idx_expense_settings_apt      ON expense_settings(apartment_id);
+CREATE INDEX idx_admin_users_role          ON admin_users(role);
+CREATE INDEX idx_prt_token                 ON password_reset_tokens(token);
+CREATE INDEX idx_prt_user                  ON password_reset_tokens(user_kind, user_id);
+```
 
-## API Endpoints (Full Specification)
-Authentication
-POST   /api/auth/login               # admin login → JWT
-POST   /api/auth/tenant/login        # tenant login → JWT
-POST   /api/auth/register-admin      # create admin (super admin only)
-PUT    /api/auth/change-password     # change own password
+### 6.4 Seed default `system_settings` rows
 
-Apartments
-GET    /api/apartments               # list all (with room counts)
-GET    /api/apartments/:id           # detail + settings
-POST   /api/apartments               # create + auto-generate rooms
-PUT    /api/apartments/:id           # update info
-GET    /api/apartments/:id/rooms     # list rooms (filter by ?status=)
-PUT    /api/apartments/:id/settings  # update expense settings
+```sql
+INSERT INTO system_settings (key, value) VALUES
+  ('smtp_host',''), ('smtp_port','587'), ('smtp_secure','false'),
+  ('smtp_user',''), ('smtp_password',''), ('smtp_from',''),
+  ('app_base_url','http://localhost:3000')
+ON CONFLICT (key) DO NOTHING;
+```
 
-Rooms
-GET    /api/rooms/:id                # single room detail
-PUT    /api/rooms/:id                # update price/status
-PUT    /api/rooms/bulk/floor-price   # set uniform price for whole floor
+---
 
-Tenants
-GET    /api/tenants                  # list active tenants (?apartment_id=)
-GET    /api/tenants/:id              # single tenant detail
-POST   /api/tenants                  # create tenant (hashes national_id → password)
-PUT    /api/tenants/:id              # update tenant info
-POST   /api/tenants/:id/moveout      # record move-out date, set is_active=false
-GET    /api/tenants/:id/contract     # generate PDF rental contract (A4, Thai)
+## 7. Authentication, Roles & RBAC
 
-Bills & Meter Readings
-GET    /api/bills?month=&year=&apartment_id=   # list bills for month/year
-GET    /api/bills/:id                           # single bill detail
-POST   /api/bills                               # create bill + meter reading
-PUT    /api/bills/:id                           # edit bill + meter reading
-GET    /api/bills/:id/pdf?size=A4|A5           # download invoice PDF
-GET    /api/bills/meter/:room_id?month=&year=  # get meter reading for room/month
+### 7.1 Token shape
 
-Settings
-GET    /api/settings/:apartment_id   # get expense settings
-PUT    /api/settings/:apartment_id   # update expense settings
+`signToken(payload)` issues a JWT signed with `JWT_SECRET`, expiring after `JWT_EXPIRES_IN` (default `7d`).
 
-## Business Rules (CRITICAL - Must Follow Exactly)
-1. Room Number Auto-Generation
-room_number = floor_number.toString() + room_sequence.toString().padStart(2, '0')
+- **Admin token payload:** `{ id, role: 'admin', admin_role, username, is_super_admin, apartment_id }`
+- **Tenant token payload:** `{ id, role: 'tenant', room_id, apartment_id }`
 
-Examples:
-  floor=1,  seq=1  → "101"
-  floor=1,  seq=10 → "110"
-  floor=10, seq=8  → "1008"
-  floor=3,  seq=5  → "305"
-  
-2. Meter Rollover Calculation
-// Water calculation
-if (rollover_water) {
-    water_usage = (water_max_units - water_units_last) + water_units_current;
-} else {
-    water_usage = water_units_current - water_units_last;
-}
-water_cost = water_usage * water_price_per_unit;
+`admin_role` is one of `super_admin | admin | property_manager`. `is_super_admin` is kept as a legacy boolean and is mirrored from `admin_role === 'super_admin'`.
 
-// Electricity calculation (same logic)
-if (rollover_electricity) {
-    electricity_usage = (electricity_max_units - electricity_units_last) + electricity_units_current;
-} else {
-    electricity_usage = electricity_units_current - electricity_units_last;
-}
-electricity_cost = electricity_usage * electricity_price_per_unit;
+### 7.2 Middleware (`backend/middleware/auth.js`)
 
-3. Bill Total Calculation
-total_cost = water_cost + electricity_cost + rent_cost + other_cost;
+```
+authenticate            -> verifies Bearer token, sets req.user
+adminOnly               -> req.user.role === 'admin'
+tenantOnly              -> req.user.role === 'tenant'
+superAdminOnly          -> admin AND admin_role === 'super_admin'
+requireAdminRoles(...allowed) -> admin AND admin_role in allowed
+signToken(payload)
+```
 
-4. Tenant Password Rules
-- Default password on creation = national_id (bcrypt hashed, salt rounds = 10)
-- Tenant can change password via /api/auth/change-password
-- Admin cannot see or reset to plain text
+### 7.3 Role capabilities (UI + API)
 
-5. Room Status Rules
-- New rooms default to: 'vacant'
-- When tenant added → room status changes to: 'occupied'
-- When tenant moves out → room status changes to: 'vacant'
-- Admin can manually set: 'maintenance', 'common', 'caretaker'
+| Capability                                  | super_admin | admin | property_manager | tenant |
+|---------------------------------------------|:-----------:|:-----:|:----------------:|:------:|
+| Login                                        | ✅ | ✅ | ✅ | ✅ |
+| Dashboard, Apartments, Rooms, Tenants        | ✅ | ✅ | ❌ | ❌ |
+| Billing list & form, edit/create bills       | ✅ | ✅ | ❌ | ❌ |
+| Print Invoice page (single + bulk PDF)       | ✅ | ✅ | ✅ | ❌ |
+| Apartment / Tenant create / move-out / delete | ✅ | ✅ | ❌ | ❌ |
+| Edit tenant (limited fields like phone/email) | ✅ | ✅ | ✅ | ❌ |
+| Settings (per-apartment expense + contract)  | ✅ | ✅ | ❌ | ❌ |
+| User Management (`/admin/users`)             | ✅ | ❌ | ❌ | ❌ |
+| System Settings — SMTP (`/admin/system-settings`) | ✅ | ❌ | ❌ | ❌ |
+| Tenant own dashboard / bills / contract / profile | ❌ | ❌ | ❌ | ✅ |
 
-6. Bill Existence Check
-- Before creating a bill: check if bill exists for (room_id, month, year)
-- If exists → switch to EDIT mode (PUT /api/bills/:id)
-- If not exists → CREATE mode (POST /api/bills)
-- Frontend must detect this automatically
+The Sidebar (`frontend/src/components/Sidebar.jsx`) is the source of truth for visibility. After login, redirect by role:
+- `tenant` → `/tenant/dashboard`
+- `admin_role === 'property_manager'` → `/admin/invoice`
+- otherwise → `/admin/dashboard`
 
-7. Invoice Filter Defaults
-- Default status filter for invoice generation: ['occupied', 'caretaker']
-- Admin can toggle to include: 'maintenance', 'common', 'vacant'
+---
 
-8. Move-Out Process
-1. Record move_out_date on tenant record
-2. Set tenant.is_active = FALSE
-3. Set room.status = 'vacant'
-4. Keep all historical bills and meter readings
-5. Tenant no longer appears in active tenant list
+## 8. Backend API
 
-9. Room Price Flexibility
-- On apartment creation: set uniform price for all rooms (optional)
-- Admin can update individual room price anytime
-- Admin can set uniform price per floor (bulk update)
+All responses use the envelope `{ data: ... }` for success and `{ error: 'message' }` for failure. The frontend's `unwrap` helper extracts `r.data.data ?? r.data`.
 
-## Frontend Pages Specification
-Admin Pages
-1. Login Page (/login)
-	Username + password fields
-	Toggle to tenant login (uses National ID)
-	JWT stored in localStorage
-	Redirect to dashboard on success
-2. Dashboard (/admin/dashboard)
-	Summary cards: total rooms, occupied, vacant, maintenance
-	Revenue summary for current month
-	Recent tenants table
-	Quick links to billing
-3. Apartments (/admin/apartments)
-	List all apartments with room counts
-	Create form: name, address, phone, floors, rooms/floor, starting price
-	Edit apartment info
-	Link to rooms view
-4. Rooms (/admin/rooms/:apartmentId)
-	Grid view of all rooms by floor
-	Color coded by status:
-	occupied → green
-	vacant → gray
-	maintenance → yellow
-	common → blue
-	caretaker → purple
-	Click room → edit price/status modal
-	Bulk set price by floor
-	Show tenant name if occupied
-5. Tenants (/admin/tenants)
-	Filter by apartment
-	Table: room number, name, phone, move-in date, actions
-	Add tenant form (links to vacant room)
-	Edit tenant info
-	Move-out button → confirm dialog → records date
-	Download contract PDF button
-6. Billing (/admin/billing)
-	Select apartment + month + year
-	Table of all rooms with bill status
-	Click room → open BillingForm
-	BillingForm:
-	Last/current readings for water & electricity
-	Rollover checkboxes
-	Auto-calculated costs (update on change)
-	Rent (pre-filled from room price)
-	Other costs field
-	Grand total (read-only, auto-sum)
-	Save button
-7. Invoice (/admin/invoice)
-	Select apartment + month + year
-	Status filter checkboxes (default: occupied + caretaker)
-	Preview list of rooms to print
-	Download All as PDF (A4 or A5 selector)
-	Download individual invoice
-8. Settings (/admin/settings)
-	Select apartment
-	Water price per unit
-	Water max meter units
-	Electricity price per unit
-	Electricity max meter units
-	Invoice footer text (textarea)
-	Save button
-	
-## Tenant Pages
-1. Tenant Login (/tenant/login)
-	National ID + password
-	Link back to admin login
-2. Tenant Dashboard (/tenant/dashboard)
-	Welcome message with room number
-	Current month bill summary
-	Download contract PDF button
-3. Tenant Bills (/tenant/bills)
-	History table: month, year, water, electricity, rent, other, total
-	Download PDF for each bill
+### 8.1 `/api/auth`
 
-## PDF Layout Requirements
-Rental Contract (A4, Thai language)
-┌─────────────────────────────────────┐
-│      สัญญาเช่าห้องพัก               │
-│   [ชื่ออพาร์ทเมนต์]                  │
-│   [ที่อยู่]  โทร: [เบอร์]            │
-├─────────────────────────────────────┤
-│ ทำที่: [ที่อยู่]  วันที่: [วัน/เดือน/ปี] │
-├─────────────────────────────────────┤
-│ ผู้ให้เช่า: [ชื่อเจ้าของ]             │
-│ ผู้เช่า:   [ชื่อผู้เช่า]              │
-│ เลขบัตรประชาชน: [เลขบัตร]           │
-│ โทรศัพท์: [เบอร์]                    │
-├─────────────────────────────────────┤
-│ ห้องเลขที่: [เลขห้อง]               │
-│ ค่าเช่าต่อเดือน: [ราคา] บาท         │
-│ วันเริ่มสัญญา: [วันที่]              │
-├─────────────────────────────────────┤
-│ ข้อตกลงและเงื่อนไข:                 │
-│ 1. ผู้เช่าตกลงชำระค่าเช่า...        │
-│ 2. ผู้เช่าต้องรักษาทรัพย์สิน...     │
-│ 3. ห้ามนำสัตว์เลี้ยงเข้าพัก...      │
-│ 4. ห้ามประกอบกิจการ...              │
-│ 5. การบอกเลิกสัญญา...              │
-│ [ข้อตกลง 10 ข้อ ภาษาไทย]           │
-├─────────────────────────────────────┤
-│ ลงชื่อผู้ให้เช่า: ............       │
-│ ลงชื่อผู้เช่า:   ............       │
-│ ลงชื่อพยาน:     ............       │
-└─────────────────────────────────────┘
+| Method | Path                      | Auth                | Body / behaviour |
+|--------|---------------------------|---------------------|------------------|
+| POST   | `/login`                   | public              | `{ username, password }` → `{ token, user }` (admin) |
+| POST   | `/tenant/login`            | public              | `{ national_id, password }` → `{ token, user }` (only when `is_active = TRUE`) |
+| POST   | `/register-admin`          | super-admin         | `{ username, password (≥6), full_name?, email?, apartment_id?, role? }`. Maps `role==='super_admin'` to `is_super_admin=true`. |
+| PUT    | `/change-password`         | any logged-in       | `{ old_password, new_password (≥6) }` (works for both admin and tenant — picks table by `req.user.role`) |
+| POST   | `/forgot-password`         | public              | `{ identifier }` (email / username / national_id). Always responds `{sent:true}` (don't leak existence). Generates 32-byte hex token, stores in `password_reset_tokens` (1-hour expiry), sends email with link `<app_base_url>/reset-password?token=...`. |
+| POST   | `/reset-password`          | public              | `{ token, new_password (≥6) }`. Marks `used_at`, updates the right user's `password_hash`. Reject expired/used tokens. |
 
-Bill Invoice (A4 & A5, Thai language)
-┌─────────────────────────────────────┐
-│   ใบแจ้งค่าเช่าและค่าใช้จ่าย       │
-│   [ชื่ออพาร์ทเมนต์]                  │
-│   [ที่อยู่]  โทร: [เบอร์]            │
-├─────────────────────────────────────┤
-│ ห้องเลขที่: [เลขห้อง]               │
-│ ผู้เช่า:   [ชื่อ]                    │
-│ ประจำเดือน: [เดือน พ.ศ.]            │
-├─────────────────────────────────────┤
-│ ค่าน้ำประปา                         │
-│   มิเตอร์ครั้งก่อน:  [หน่วย]         │
-│   มิเตอร์ครั้งนี้:   [หน่วย]         │
-│   จำนวนหน่วย:       [หน่วย]         │
-│   ราคาต่อหน่วย:     [ราคา] บาท      │
-│   รวมค่าน้ำ:        [ราคา] บาท      │
-├─────────────────────────────────────┤
-│ ค่าไฟฟ้า                            │
-│   มิเตอร์ครั้งก่อน:  [หน่วย]         │
-│   มิเตอร์ครั้งนี้:   [หน่วย]         │
-│   จำนวนหน่วย:       [หน่วย]         │
-│   ราคาต่อหน่วย:     [ราคา] บาท      │
-│   รวมค่าไฟ:         [ราคา] บาท      │
-├─────────────────────────────────────┤
-│ ค่าเช่าห้อง:        [ราคา] บาท      │
-│ ค่าใช้จ่ายอื่นๆ:    [ราคา] บาท      │
-├─────────────────────────────────────┤
-│ รวมทั้งสิ้น:        [ราคา] บาท      │
-├─────────────────────────────────────┤
-│ [ข้อความท้ายใบแจ้งหนี้]             │
-└─────────────────────────────────────┘
+### 8.2 `/api/apartments` (admin)
 
-## Backend Dependencies (backend/package.json)
+| Method | Path                          | Roles allowed |
+|--------|-------------------------------|---------------|
+| GET    | `/`                            | any admin |
+| GET    | `/:id`                         | any admin |
+| POST   | `/`                            | super_admin, admin |
+| PUT    | `/:id`                         | super_admin, admin |
+| GET    | `/:id/delete-preview`          | any admin |
+| DELETE | `/:id?force=true`              | super_admin, admin |
+| GET    | `/:id/rooms?status=`           | any admin |
+| PUT    | `/:id/settings`                | super_admin, admin (legacy; prefer `/api/settings/:apt`) |
+
+`POST /` expects `{ name, address, contact_number?, floors_count, rooms_per_floor, starting_price? }`. In one transaction: insert apartment, generate every room (`floor + LPAD(seq,2,'0')`), insert one default `expense_settings` row.
+
+`GET /:id/delete-preview` returns `{ rooms, active_tenants, bills, meter_readings }` so the UI can confirm.
+
+`DELETE /:id` refuses if active tenants exist unless `?force=true`. With force, it sets active tenants `is_active=false`, `move_out_date=today`, then `DELETE FROM apartments` (cascade does the rest).
+
+`GET /` returns each apartment with `rooms_total`, `rooms_occupied`, `rooms_vacant` aggregates.
+
+`GET /:id/rooms` returns each room joined with the active tenant (if any) — `tenant_id`, `tenant_name`, `tenant_phone`.
+
+### 8.3 `/api/rooms` (admin)
+
+| Method | Path                    | Roles |
+|--------|-------------------------|-------|
+| GET    | `/:id`                   | any admin |
+| PUT    | `/:id`                   | any admin (`property_manager` allowed for misc fields) |
+| PUT    | `/bulk/floor-price`      | super_admin, admin |
+
+`PUT /:id` body: `{ rental_price?, status?, room_number?, notes? }`. Rejects duplicate `room_number` within the same apartment (`23505 → 409`).
+
+`PUT /bulk/floor-price` body: `{ apartment_id, floor_number, rental_price }`.
+
+### 8.4 `/api/tenants`
+
+| Method | Path                      | Auth |
+|--------|---------------------------|------|
+| GET    | `/?apartment_id=`          | any admin |
+| GET    | `/:id`                     | admin OR tenant if `id === self` |
+| POST   | `/`                        | super_admin, admin |
+| PUT    | `/:id`                     | any admin (incl. property_manager) |
+| PUT    | `/me/profile`              | tenant (self) |
+| POST   | `/:id/moveout`             | super_admin, admin |
+| GET    | `/:id/contract`            | admin OR tenant if `id === self` (returns PDF) |
+
+`POST /` expects `{ room_id, full_name, national_id, move_in_date, phone_number?, email?, address?, notes? }`. In a transaction: insert tenant with `password_hash = bcrypt(national_id)`, set room status to `'occupied'`. `23505 → 409 (national_id exists)`.
+
+`PUT /:id` admins can update everything except the password hash. If the body contains a new `national_id` AND `reset_password === true`, also update `password_hash = bcrypt(new_nid)`.
+
+`PUT /me/profile` (tenant) body: `{ full_name?, phone_number?, email?, address?, national_id? }`. If national_id changes, do NOT auto-reset password.
+
+`POST /:id/moveout` body: `{ move_out_date? }` (default = today). Sets `is_active=false`, `move_out_date`, and the room's status back to `'vacant'`. Historical bills/meter readings are preserved.
+
+`GET /:id/contract` returns `application/pdf`. Joins the tenant's apartment's `expense_settings.contract_terms` so the PDF can use them. See §10 PDF spec.
+
+### 8.5 `/api/bills`
+
+| Method | Path                              | Auth |
+|--------|-----------------------------------|------|
+| GET    | `/?month=&year=&apartment_id=`    | any admin |
+| GET    | `/:id`                            | admin OR tenant if same room |
+| POST   | `/`                               | super_admin, admin |
+| PUT    | `/:id`                            | super_admin, admin |
+| GET    | `/meter/:room_id?month=&year=`    | any admin |
+| GET    | `/tenant/me`                      | tenant — list own bills |
+| GET    | `/:id/pdf?size=A4|A5&lang=th|en`  | admin OR tenant if same room |
+| POST   | `/import`                         | super_admin, admin |
+| POST   | `/bulk-pdf`                       | any admin |
+
+`GET /` returns each bill enriched with `r.room_number, r.apartment_id, r.rental_price, r.status, t.full_name AS tenant_name`. The dashboard relies on `r.status` to filter by room status.
+
+`POST /` and `PUT /:id` use the same `computeBill` helper in a single transaction:
+
+```
+water_usage  = rollover_water       ? (water_max - last) + current : current - last
+elec_usage   = rollover_electricity ? (elec_max  - last) + current : current - last
+water_cost   = water_usage * water_price_per_unit
+elec_cost    = elec_usage  * electricity_price_per_unit
+rent_cost    = body.rent_cost ?? rooms.rental_price
+total_cost   = water_cost + elec_cost + rent_cost + other_cost
+```
+
+Both the meter reading and the bill use `INSERT ... ON CONFLICT (room_id, month, year) DO UPDATE`. The frontend's BillingForm shouldn't differentiate create vs. edit — the server handles it.
+
+`GET /meter/:room_id` returns the current month's reading, OR if absent, falls back to the most-recent prior reading's `*_current` as the new `*_last` (so the form can pre-fill).
+
+`POST /import` body: `{ apartment_id, month, year, rows: [{ room_no, water, electric }, ...] }`. For each row, look up the room by `room_number`, find the previous month's `_current` as `_last`, compute usage and cost, upsert the meter reading + bill (preserving any existing `other_cost`). Response:
+
+```json
 {
-  "dependencies": {
-    "bcrypt":             "^5.1.1",
-    "cors":               "^2.8.5",
-    "dotenv":             "^16.3.1",
-    "express":            "^4.18.2",
-    "express-validator":  "^7.0.1",
-    "jsonwebtoken":       "^9.0.2",
-    "pg":                 "^8.11.3",
-    "pdfkit":             "^0.14.0"
-  },
-  "devDependencies": {
-    "nodemon":            "^3.0.2"
-  }
+  "summary": { "rows_in": N, "imported": X, "updated": Y, "skipped": Z, "missing_rooms": [] },
+  "items":   [ { room_no, water_last, water_current, water_usage, water_cost, ..., total, action } ]
 }
+```
 
-## Frontend Dependencies (frontend/package.json)
-{
-  "dependencies": {
-    "react":              "^18.2.0",
-    "react-dom":          "^18.2.0",
-    "react-router-dom":   "^6.20.0",
-    "axios":              "^1.6.2",
-    "react-scripts":      "5.0.1",
-    "@heroicons/react":   "^2.0.18",
-    "react-hot-toast":    "^2.4.1",
-    "date-fns":           "^2.30.0"
-  },
-  "devDependencies": {
-    "tailwindcss":        "^3.3.6",
-    "autoprefixer":       "^10.4.16",
-    "postcss":            "^8.4.32"
-  }
-}
+`POST /bulk-pdf` body: `{ bill_ids: [int...], size?, lang? }`. Joins everything once (apartment, room, meter, settings, tenant) and renders one PDF page per bill in the order returned by `r.apartment_id, r.room_number`.
 
-## Code Quality Rules (Must Follow)
-General
-1. Use async/await everywhere - NO callbacks
-2. Always wrap DB calls in try/catch
-3. Use parameterized queries ONLY - NEVER string concatenate SQL
-4. Validate all request inputs before processing
-5. Return consistent JSON: { data } for success, { error } for failure
-6. Log errors to console with context
+### 8.6 `/api/settings/:apartment_id` (admin)
 
-Security
-1. Never return password_hash in any API response
-2. Sanitize all inputs
-3. Check user ownership before update/delete
-4. Admin routes require: authenticate + adminOnly middleware
-5. Tenant routes require: authenticate middleware
-6. Use helmet middleware for HTTP headers
+| Method | Path  | Roles |
+|--------|-------|-------|
+| GET    | `/:apartment_id` | any admin |
+| PUT    | `/:apartment_id` | super_admin, admin |
 
-Database
-1. Use transactions for multi-table operations
-2. Always use connection pool (never single client)
-3. Release connections in finally blocks
-4. Use ON CONFLICT DO UPDATE for upsert patterns
+`GET` returns the row, **falling back to default `contract_terms`** when the stored value is empty. This is so the Settings page never starts blank — admins always see editable defaults.
 
-Frontend
-1. All API calls through src/utils/api.js (axios instance)
-2. JWT token attached via axios interceptor
-3. Handle 401 → redirect to login
-4. Show loading spinners during API calls
-5. Show success/error toasts for all mutations
-6. Forms use controlled components
-7. Thai language for ALL labels, buttons, messages
+`PUT` upserts: `water_price_per_unit, water_max_units, electricity_price_per_unit, electricity_max_units, invoice_footer_text, contract_terms`.
 
-## Thai Language Reference
-Month Names (Thai)
+### 8.7 `/api/users` (super-admin)
+
+| Method | Path                                 |
+|--------|--------------------------------------|
+| GET    | `/`                                   |
+| POST   | `/`                                   |
+| PUT    | `/:id`                                |
+| DELETE | `/:id`                                |
+| POST   | `/tenants/:tenant_id/reset-password`  |
+
+Allowed roles: `super_admin | admin | property_manager`. Setting `role === 'super_admin'` also flips `is_super_admin=true`.
+
+`DELETE /:id` rejects deleting yourself. `POST /tenants/:tenant_id/reset-password` body: `{ new_password (≥6) }`.
+
+`GET /` returns each row with `apartment_name` (LEFT JOIN), and a `role_label` mapping:
+
+```
+super_admin → 'ผู้ดูแลระบบสูงสุด'
+admin       → 'ผู้ดูแลระบบ'
+property_manager → 'ผู้ดูแลหอพัก'
+```
+
+### 8.8 `/api/system-settings` (super-admin)
+
+| Method | Path           |
+|--------|----------------|
+| GET    | `/`             |
+| PUT    | `/`             |
+| POST   | `/test-email`   |
+
+Allowed keys (anything else is silently ignored):
+
+```
+smtp_host, smtp_port, smtp_secure, smtp_user, smtp_password, smtp_from, app_base_url
+```
+
+`GET` masks `smtp_password` as `'••••••••'` if non-empty (don't leak the value to clients).
+
+`PUT` upserts each key/value into `system_settings`. **Skip writes when `smtp_password` arrives as the masked placeholder or empty string** — that means the user didn't change it.
+
+`POST /test-email` body: `{ to }`. Sends a small Thai test email via the current SMTP settings.
+
+### 8.9 Mailer (`backend/utils/mailer.js`)
+
+Reads SMTP config at send-time (so saving in the UI takes immediate effect). Throws `'SMTP not configured...'` if `smtp_host` or `smtp_user` is empty.
+
+```js
+nodemailer.createTransport({
+  host:   smtp_host,
+  port:   parseInt(smtp_port || '587', 10),
+  secure: smtp_secure.toLowerCase() === 'true',
+  auth:   { user: smtp_user, pass: smtp_password },
+});
+```
+
+`from = smtp_from || smtp_user`. `getAppBaseUrl()` reads `app_base_url`, strips trailing slashes, default `http://localhost:3000`. Used for the password-reset link.
+
+---
+
+## 9. Business Rules (must follow exactly)
+
+1. **Room number** = `floor.toString() + sequence.toString().padStart(2,'0')`. Examples: f=1,s=1 → `"101"`; f=10,s=8 → `"1008"`; f=3,s=5 → `"305"`.
+
+2. **Meter rollover** — see §8.5 formulas. `water_max_units` and `electricity_max_units` come from the apartment's `expense_settings` (default 9999).
+
+3. **Bill total** = `water_cost + electricity_cost + rent_cost + other_cost`.
+
+4. **Tenant default password** = `bcrypt(national_id, 10)`. Tenant can change it; admin (super_admin) can reset it via `/admin/users` to any ≥6-char password.
+
+5. **Room status transitions:**
+   - New rooms default to `'vacant'`.
+   - Adding a tenant flips the room to `'occupied'`.
+   - Move-out flips it back to `'vacant'`.
+   - Admin can manually set `'maintenance' | 'common' | 'caretaker'`.
+
+6. **Bill upsert** is server-side (same form regardless of create/edit). The frontend `BillingForm` always submits and the server resolves which (`room_id, month, year`) row to write.
+
+7. **Invoice status filter (Print Invoice page)** defaults to `['occupied','caretaker']`. The user can toggle others.
+
+8. **Dashboard revenue status filter** also defaults to `['occupied','caretaker']` and re-aggregates on toggle. It uses `r.status` from the bills response (NOT just "tenant exists").
+
+9. **Move-out** keeps all historical bills/meter readings. Tenant disappears from active list (`is_active=false`). Their `room_id` is preserved (LEFT JOIN tolerates `SET NULL` when the room is later deleted).
+
+10. **Apartment delete** requires `?force=true` if active tenants exist. With force: auto move-out all active tenants, then cascade-delete the apartment.
+
+11. **Per-apartment uniform pricing** — `PUT /api/rooms/bulk/floor-price` updates every room on a given floor. `Apartments.create` accepts a `starting_price` to seed every room.
+
+12. **Buddhist year (พ.ศ.)** = Gregorian + 543. All UI labels and PDFs use it.
+
+13. **Forgot-password response** never reveals whether an account exists (always `{sent:true}`). Token TTL = 1 hour, single-use (`used_at`).
+
+14. **Contract terms (`contract_terms`)** — stored as a single TEXT field; one rule per line. The PDF splits on `\r?\n`, trims, drops empty lines. If empty/null, fall back to `DEFAULT_CONTRACT_TERMS` (see §10).
+
+---
+
+## 10. PDF Generation
+
+`backend/utils/pdf.js` exports four generators:
+
+```
+generateContractPDF(t, stream)
+generateInvoicePDF(b, size, stream)          // Thai
+generateInvoicePDFEnglish(b, size, stream)
+generateInvoicePDFBulk(bills, size, lang, stream)
+```
+
+### 10.1 Fonts
+
+```
+FONT_REGULAR = backend/utils/fonts/Sarabun-Regular.ttf
+FONT_BOLD    = backend/utils/fonts/Sarabun-Bold.ttf
+```
+
+`applyFonts(doc)` registers `'thai'` and `'thai-bold'` if the files exist, otherwise falls back to Helvetica. It also registers `'reg'`/`'bold'` (always Helvetica) for English output.
+
+### 10.2 Rental Contract (A4 portrait, Thai)
+
+```
+สัญญาเช่าห้องพัก                       (centered, bold 20)
+[ชื่ออพาร์ทเมนต์]                      (centered, bold 14)
+[ที่อยู่]                              (centered, regular 10)
+โทร: [contact_number]                  (if present)
+
+ทำที่: [apartment_address]
+วันที่: [today in Buddhist DD/MM/YYYY]
+
+คู่สัญญา                               (bold)
+ผู้ให้เช่า: [apartment_name]
+ผู้เช่า:   [tenant.full_name]
+เลขบัตรประชาชน: [national_id]
+โทรศัพท์: [phone_number] (if present)
+
+รายละเอียดห้องพัก                       (bold)
+ห้องเลขที่: [room_number]
+ค่าเช่าต่อเดือน: [rental_price] บาท
+วันเริ่มสัญญา: [move_in_date in Buddhist DD/MM/YYYY]
+
+ข้อตกลงและเงื่อนไข                      (bold, then list at fontSize 10)
+[lines from expense_settings.contract_terms split by \n,
+ OR DEFAULT_CONTRACT_TERMS if empty]
+
+ลงชื่อ ............................................. ผู้ให้เช่า
+ลงชื่อ ............................................. ผู้เช่า
+ลงชื่อ ............................................. พยาน
+```
+
+`DEFAULT_CONTRACT_TERMS` (in `backend/utils/contractDefaults.js`, mirrored as a constant in `frontend/src/pages/admin/Settings.jsx` to seed the textarea):
+
+```
+1. ผู้เช่าตกลงชำระค่าเช่าภายในวันที่ 5 ของทุกเดือน
+2. ผู้เช่าต้องรักษาทรัพย์สินภายในห้องพักให้อยู่ในสภาพดี
+3. ห้ามนำสัตว์เลี้ยงทุกชนิดเข้าพักโดยไม่ได้รับอนุญาต
+4. ห้ามประกอบกิจการที่ผิดกฎหมาย
+5. การบอกเลิกสัญญาต้องแจ้งล่วงหน้าอย่างน้อย 30 วัน
+6. ผู้เช่าต้องชำระค่าน้ำประปาและค่าไฟฟ้าตามมิเตอร์
+7. ห้ามดัดแปลงต่อเติมห้องพักโดยไม่ได้รับอนุญาต
+8. ผู้เช่าต้องส่งคืนห้องพักในสภาพเรียบร้อยเมื่อสิ้นสุดสัญญา
+9. การกระทำใด ๆ ที่ขัดต่อสัญญาฉบับนี้ ผู้ให้เช่ามีสิทธิ์บอกเลิกสัญญาได้ทันที
+10. คู่สัญญาทั้งสองฝ่ายได้อ่านและเข้าใจข้อตกลงทั้งหมดแล้ว
+```
+
+### 10.3 Bill Invoice (A4 / A5, **landscape**, Thai or English)
+
+Layout (landscape, 28pt margin on all sides). Defaults: `size='A5'`, `lang='th'`.
+
+Header rows (right-aligned bill number top-right, then centered apartment header, then centered period subtitle, then right-aligned `ห้อง : XXX`):
+
+```
+                                                            บิลเลขที่      YYYYMMRoomNumber
+
+                          [ชื่ออพาร์ทเมนต์]   [ที่อยู่]       (bold 15)
+              บิลเรียกเก็บเงินค่าเช่าห้อง ประจำเดือน MM YYYY   (regular 11)
+                                                                ห้อง :     XXX
+```
+
+`billNo = `${b.year}${String(b.month).padStart(2,'0')}${room_number || ''}``.
+
+Then a 6-column table. Header row has a solid blue background `#0000ff` with white text. Column widths are fractional of usable width:
+
+| col # | key     | title (Thai)        | title (English) | width | align  |
+|-------|---------|---------------------|-----------------|-------|--------|
+| 1     | label   | (empty)             | (empty)         | 0.20  | center |
+| 2     | last    | จดเดือนที่แล้ว      | Prev meter      | 0.13  | center |
+| 3     | cur     | จดเดือนนี้           | Current         | 0.13  | center |
+| 4     | units   | จำนวนหน่วย          | Units           | 0.13  | center |
+| 5     | rate    | ราคาต่อหน่วย        | Rate            | 0.13  | center |
+| 6     | amount  | รวม (บาท)            | Amount (THB)    | 0.28  | center |
+
+Header height = 22pt. Each data row = 26pt with a thin `#cccccc` rule under it. Four data rows in this order:
+
+1. `ค่าน้ำ / Water` — last/current/units = integers via `intStr(...)`, rate = `water_price_per_unit`, amount = `water_cost`.
+2. `ค่าไฟ / Electricity` — analogous for electricity.
+3. `ค่าเช่าห้อง / Room rent` — only `amount = rent_cost`.
+4. `ค่าโทรศัพท์ และอื่นๆ / Other` — only `amount = other_cost`.
+
+A 26pt blue total row follows: label `รวมค่าเช่า` / `TOTAL` right-aligned across cols 1–5, value `total_cost` centered in col 6, white bold 13pt.
+
+If `b.invoice_footer_text` is non-empty, render it under the table at fontSize 10, color `#475569`.
+
+`intStr(n)` returns `Math.trunc(n)` as a string, or `''` for null/empty/NaN.
+
+### 10.4 Bulk PDF
+
+`generateInvoicePDFBulk(bills, size, lang, stream)` opens one PDFKit doc, calls `drawInvoiceThai` (or English) for the first bill, then `doc.addPage(opts)` + draw for each remaining bill. Same page options used (size + landscape + 28pt margin).
+
+---
+
+## 11. Frontend Routes
+
+`frontend/src/App.jsx`:
+
+```
+PUBLIC
+  /login              Login.jsx
+  /forgot-password    ForgotPassword.jsx
+  /reset-password     ResetPassword.jsx       (reads ?token=)
+
+ADMIN  (PrivateRoute role="admin", inside <Layout/>)
+  /admin                            redirect → /admin/dashboard
+  /admin/dashboard                  Dashboard.jsx
+  /admin/apartments                 Apartments.jsx
+  /admin/rooms/:apartmentId         Rooms.jsx
+  /admin/tenants                    Tenants.jsx
+  /admin/tenants/new                TenantForm.jsx
+  /admin/tenants/:id/edit           TenantForm.jsx
+  /admin/billing                    Billing.jsx
+  /admin/billing/:roomId/:month/:year  BillingForm.jsx
+  /admin/invoice                    Invoice.jsx
+  /admin/settings                   Settings.jsx
+  /admin/users                      Users.jsx              (super-admin only — guarded by sidebar AND server)
+  /admin/system-settings            SystemSettings.jsx     (super-admin only)
+
+TENANT (PrivateRoute role="tenant", inside <Layout tenantMode/>)
+  /tenant                           redirect → /tenant/dashboard
+  /tenant/dashboard                 TenantDashboard.jsx
+  /tenant/bills                     TenantBills.jsx
+  /tenant/contract                  TenantContract.jsx
+  /tenant/profile                   TenantProfile.jsx
+
+CATCH-ALL
+  *                                 redirect → /login
+```
+
+`PrivateRoute` checks `useAuth()`: if not ready, show spinner; if no user, redirect to `/login`; if a `role` prop is provided and doesn't match, redirect to `/admin` or `/tenant`.
+
+---
+
+## 12. Frontend Page Specs
+
+### 12.1 Login (`pages/Login.jsx`)
+
+- Tab switcher between `'admin' | 'tenant'`. **Selected tab uses dark brand color** (`bg-brand-700 text-white font-semibold`); unselected is muted.
+- Admin: username + password. Tenant: national_id + password.
+- After login, redirect by role (see §7.3).
+- "ลืมรหัสผ่าน?" link → `/forgot-password`.
+
+### 12.2 Forgot / Reset Password
+
+- `ForgotPassword`: one input `identifier`, posts to `/auth/forgot-password`, shows a green confirmation regardless of result.
+- `ResetPassword`: reads `?token=` from URL, posts new password (≥6, double-entry confirm), redirects to `/login`.
+
+### 12.3 Layout / Sidebar / Navbar
+
+- Sidebar (`md:` and up): dark `slate-900`, brand link active state `bg-brand-600 text-white`. Logo block + nav + small footer "v1.0 © Apartment MS".
+- Sidebar links per role (see §7.3 + Sidebar code).
+- Navbar shows current role label, user name, two buttons: "เปลี่ยนรหัสผ่าน" (opens `ChangePasswordModal`) and "ออกจากระบบ".
+- `ChangePasswordModal` validates ≥6 chars + match-confirm, calls `PUT /auth/change-password`.
+
+### 12.4 Dashboard (`pages/admin/Dashboard.jsx`)
+
+- Header title "แดชบอร์ด", subtitle with current Thai month + พ.ศ.
+- Month + year selector (year list = `[currentYear-3 .. currentYear+1]`).
+- 4 KPI cards: `rooms_total`, `rooms_occupied`, `rooms_vacant`, `rooms_misc`.
+- Revenue card with:
+  - Heading "รายได้รวม (ตามสถานะห้องที่เลือก)".
+  - Big total `฿ NN,NNN.NN`, subtitle "จาก N ห้อง · ประจำเดือน ...".
+  - **Status filter row** with 5 checkboxes (`occupied, caretaker, maintenance, common, vacant`); default checked = `['occupied','caretaker']`.
+  - Breakdown sub-cards for water / electricity / rent / other with progress bars (each `value / total * 100`%).
+- Apartments list at the bottom, link to `/admin/apartments`.
+
+Filter logic: `bills.filter(b => statuses.includes(b.status))` then sum `water_cost / electricity_cost / rent_cost / other_cost / total_cost`.
+
+### 12.5 Apartments (`pages/admin/Apartments.jsx`)
+
+- Table columns: name, address, contact_number, "ห้องทั้งหมด (มีผู้เช่า X)", actions (`ห้องพัก/ตั้งราคา`, `แก้ไข`, `ลบ`).
+- Create/edit modal with name, address, phone, floors_count, rooms_per_floor, plus `starting_price` only on create.
+- Delete modal first hits `GET /:id/delete-preview`, shows the counts in red-themed alert, then `DELETE /:id?force=true`.
+
+### 12.6 Rooms (`pages/admin/Rooms.jsx`)
+
+- Grouped by floor, color-coded grid:
+  ```
+  occupied    → green
+  vacant      → slate
+  maintenance → yellow
+  common      → blue
+  caretaker   → purple
+  ```
+- Click a room to edit price, status, room_number, and free-text notes.
+- "ปรับราคาทั้งชั้น" button → `PUT /rooms/bulk/floor-price`.
+
+### 12.7 Tenants (`pages/admin/Tenants.jsx`)
+
+- Apartment filter dropdown.
+- Table: room_number, full_name, phone_number, national_id, move_in_date (Thai), actions (`แก้ไข`, `สัญญา`, `ย้ายออก`).
+- "เพิ่มผู้เช่า" → `/admin/tenants/new`.
+
+### 12.8 Tenant Form (`TenantForm.jsx`)
+
+- Create mode: pick apartment, then room from `GET /apartments/:id/rooms?status=vacant`. Name, phone, national_id (required), move_in_date (default today), email, notes, address, notes textarea.
+- Edit mode: skips apartment+room pickers. If admin edits `national_id`, show a checkbox "รีเซ็ตรหัสผ่านผู้เช่าให้เท่ากับเลขบัตรใหม่" — when checked, server sets password_hash to `bcrypt(new_nid)`.
+
+### 12.9 Billing (`pages/admin/Billing.jsx` + `BillingForm.jsx`)
+
+Listing page:
+- Apartment + month + year selector.
+- Per-room row: room_number, tenant_name, status badge, total (฿ or "ยังไม่ได้สร้าง"), link "สร้าง" / "แก้ไข".
+- "นำเข้าจาก Excel" button opens `BillingImport.jsx` modal.
+
+`BillingForm` (route `/admin/billing/:roomId/:month/:year`):
+- Pre-loads room (`GET /rooms/:id`), settings (`GET /settings/:apt`), prior meter (`GET /bills/meter/:roomId?month=&year=`), and any existing bill (`GET /bills?...`).
+- Three sections: ค่าน้ำประปา / ค่าไฟฟ้า / ค่าใช้จ่ายอื่น.
+- Each meter section shows last/current inputs, rollover checkbox, computed usage + cost preview.
+- ค่าเช่าห้อง pre-filled from room.rental_price, with "ใช้ราคาห้องล่าสุด" reset link if user changed it.
+- Footer "รวมทั้งสิ้น" recomputes live.
+- Submit: if existing bill, `PUT /bills/:id`, else `POST /bills`.
+
+### 12.10 BillingImport (`BillingImport.jsx`)
+
+- Modal with month/year (defaults from parent), column-mapping (defaults `room=2, water=3, electric=4, header_row=2, data_start=3`), file picker (`.xlsx`/`.xls`).
+- Uses `xlsx` to parse the first sheet to a 2D array, slices from `data_start - 1`, for each row pulls `room_no, water (truncated int), electric (truncated int)`.
+- Preview list (first 100), then `POST /bills/import`. After success show summary (`imported, updated, skipped, missing_rooms`) plus a collapsible per-row report.
+
+### 12.11 Invoice (Print) (`pages/admin/Invoice.jsx`)
+
+- Apartment + month + year + size (A5 default, A4 option), language is fixed to Thai for now ("ภาษาไทย · แนวตั้ง" label).
+- Status filter checkboxes (default `['occupied','caretaker']`).
+- For each visible room show total (or "ยังไม่ได้สร้าง"), with "ดาวน์โหลด PDF" per row (`GET /bills/:id/pdf?size=&lang=th`).
+- "ดาวน์โหลดทั้งหมด" → `POST /bills/bulk-pdf` with all `bill_id`s currently visible.
+
+### 12.12 Settings (`pages/admin/Settings.jsx`)
+
+- Apartment dropdown, then a card with grid of 4 numeric fields (water/elec price + max units), then `invoice_footer_text` textarea, then `contract_terms` textarea (12 rows, monospace).
+- The contract terms field **pre-fills with the default 10 rules** if the API returned an empty value (server already handles this; the frontend mirrors the constant for safety).
+- A "คืนค่าเริ่มต้น" link near the textarea label resets the field to the defaults.
+- Save → `PUT /settings/:apartment_id` with the entire form object.
+
+### 12.13 Users (super-admin) (`pages/admin/Users.jsx`)
+
+- Two sections in one page:
+  1. **Admin users list** — table, with create / edit / delete modals. Cannot delete yourself (button disabled).
+  2. **รีเซ็ตรหัสผ่านผู้เช่า** — search box (matches name / national_id / room_number) + table of tenants with a "รีเซ็ตรหัสผ่าน" action that opens a modal asking for new password (≥6).
+- Role select offers all three options with Thai labels.
+
+### 12.14 System Settings (super-admin) (`pages/admin/SystemSettings.jsx`)
+
+- 7 SMTP keys + `app_base_url`. SMTP password is `type='password'`. The Gmail App Password instructions sit in an `<details>` info box.
+- Below: a "ทดสอบส่งอีเมล" card with one email input + "ส่งทดสอบ" → `POST /system-settings/test-email`.
+
+### 12.15 Tenant pages
+
+- **TenantDashboard** — greeting with full_name + room_number, current-month bill total card linking to `/tenant/bills`, quick links to bills + contract.
+- **TenantBills** — fetches `GET /bills/tenant/me`, year selector (only years that exist + current), table with all 5 cost columns + total, current-month row highlighted blue, per-row "ดาวน์โหลด PDF" (size A5, lang th).
+- **TenantContract** — info card with full_name / room / national_id, button → `GET /tenants/:id/contract` (where `:id` = self).
+- **TenantProfile** — fetches `GET /tenants/:id`, allows updating full_name, phone_number, national_id, email, address. Saves via `PUT /tenants/me/profile`. After save, refresh local AuthContext user (so navbar updates).
+
+---
+
+## 13. Frontend Helpers (`utils/api.js`)
+
+```js
+const api = axios.create({ baseURL: process.env.REACT_APP_API_URL || '/api', timeout: 30000 });
+
+api.interceptors.request.use(cfg => {
+    const token = localStorage.getItem('apt_token');
+    if (token) cfg.headers.Authorization = `Bearer ${token}`;
+    return cfg;
+});
+
+api.interceptors.response.use(r => r, err => {
+    if (err.response?.status === 401) {
+        localStorage.removeItem('apt_token');
+        localStorage.removeItem('apt_user');
+        if (!location.pathname.startsWith('/login')) location.assign('/login');
+    }
+    return Promise.reject(err);
+});
+
+export const unwrap   = (p) => p.then(r => r.data?.data ?? r.data);
+export const fmtMoney = (n) => Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2});
+export const thaiYear = (g) => Number(g) + 543;
+export const fmtThaiDate = (input) => /* DD/MM/YYYY in พ.ศ. or '-' */;
+export const THAI_MONTHS = ['มกราคม', ..., 'ธันวาคม'];
+```
+
+`AuthContext` keeps `user`, `token`, `ready`, exposes `login(token,user)` and `logout()`. Both values are persisted in `localStorage` under keys `apt_token` and `apt_user`.
+
+---
+
+## 14. Code Quality Rules
+
+### General
+
+1. `async/await` everywhere; no callbacks.
+2. Wrap every DB call in `try/catch` and log with a tagged prefix `[route/action]`.
+3. **Always** parameterize SQL — never string-concat.
+4. Validate inputs with `express-validator` for endpoints with required body fields.
+5. Success responses are `{ data }`, errors are `{ error: 'message' }`. Status codes: 200/201/400/401/403/404/409/500.
+
+### Security
+
+1. Never return `password_hash` in any API response.
+2. `helmet()` middleware.
+3. Sanitize `req.body` (`.trim()` strings before insert).
+4. Admin routes: `authenticate` + `adminOnly` (and `requireAdminRoles` where finer control is needed).
+5. Tenant routes: `authenticate` + check `req.user.role === 'tenant'` and ownership (`req.user.id === param.id`).
+6. `password_reset_tokens` use 32-byte hex (`crypto.randomBytes`), 1h TTL, single-use.
+7. `system-settings` masks SMTP password (`'••••••••'`) on read, ignores writes that match the placeholder.
+
+### Database
+
+1. Use a connection pool (`pg.Pool`, `max=20`, `idleTimeoutMillis=30000`, `connectionTimeoutMillis=10000`).
+2. Multi-table writes go through `db.getClient()` + `BEGIN/COMMIT/ROLLBACK` + `client.release()` in a `finally`.
+3. Prefer `INSERT ... ON CONFLICT (...) DO UPDATE` for upserts.
+
+### Frontend
+
+1. All API calls go through the shared `api` axios instance.
+2. JWT attached automatically; 401 redirects to `/login`.
+3. Show spinners while loading; show `react-hot-toast` for success/error.
+4. Forms are controlled components; validate before submit.
+5. **All** UI text is Thai. Buddhist year for any visible date.
+6. Use `Modal` / `Table` / `Badge` / `Spinner` / `Alert` from `components/common/` for consistency.
+
+---
+
+## 15. Thai Language Reference
+
+```js
 const THAI_MONTHS = [
   'มกราคม','กุมภาพันธ์','มีนาคม','เมษายน',
   'พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม',
-  'กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'
+  'กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม',
 ];
+const thaiYear = g => Number(g) + 543;
+```
 
-// Thai Buddhist year = Gregorian year + 543
-const thaiYear = year + 543;
+UI labels:
 
-## Common UI Labels
-Dashboard         → แดชบอร์ด
-Apartments        → อพาร์ทเมนต์
-Rooms             → ห้องพัก
-Tenants           → ผู้เช่า
-Billing           → ใบแจ้งค่าเช่า
-Settings          → ตั้งค่า
-Logout            → ออกจากระบบ
-Save              → บันทึก
-Cancel            → ยกเลิก
-Delete            → ลบ
-Edit              → แก้ไข
-Add               → เพิ่ม
-Search            → ค้นหา
-Floor             → ชั้น
-Room Number       → เลขห้อง
-Rental Price      → ราคาเช่า
-Status            → สถานะ
-occupied          → มีผู้เช่า
-vacant            → ว่าง
-maintenance       → ซ่อมบำรุง
-common            → พื้นที่ส่วนกลาง
-caretaker         → ผู้ดูแล
-Full Name         → ชื่อ-นามสกุล
-Phone             → เบอร์โทรศัพท์
-National ID       → เลขบัตรประชาชน
-Move-in Date      → วันที่เข้าพัก
-Move-out Date     → วันที่ออก
-Water             → ค่าน้ำ
-Electricity       → ค่าไฟ
-Rent              → ค่าเช่า
-Other             → ค่าใช้จ่ายอื่นๆ
-Total             → รวมทั้งสิ้น
-Download PDF      → ดาวน์โหลด PDF
-Generate Invoice  → สร้างใบแจ้งหนี้
+```
+Dashboard          แดชบอร์ด
+Apartments         อพาร์ทเมนต์
+Rooms              ห้องพัก
+Tenants            ผู้เช่า
+Billing            ใบแจ้งค่าเช่า
+Print invoices     พิมพ์ใบแจ้งหนี้
+Settings           ตั้งค่า
+User Management    จัดการผู้ใช้
+System Settings    ตั้งค่าระบบ
+Logout             ออกจากระบบ
+Save / Cancel      บันทึก / ยกเลิก
+Delete / Edit      ลบ / แก้ไข
+Add / Search       เพิ่ม / ค้นหา
+Floor              ชั้น
+Room Number        เลขห้อง
+Rental Price       ราคาเช่า
+Status             สถานะ
+  occupied         มีผู้เช่า
+  vacant           ว่าง
+  maintenance      ซ่อมบำรุง
+  common           พื้นที่ส่วนกลาง
+  caretaker        ผู้ดูแล
+Full Name          ชื่อ-นามสกุล
+Phone              เบอร์โทรศัพท์
+National ID        เลขบัตรประชาชน
+Move-in / Move-out วันที่เข้าพัก / วันที่ออก
+Water              ค่าน้ำ
+Electricity        ค่าไฟ
+Rent               ค่าเช่า
+Other              ค่าใช้จ่ายอื่นๆ
+Total              รวมทั้งสิ้น
+Download PDF       ดาวน์โหลด PDF
+Generate Invoice   สร้างใบแจ้งหนี้
+Forgot password?   ลืมรหัสผ่าน?
+Change password    เปลี่ยนรหัสผ่าน
 
-## Sample Data Requirements (seed.sql)
-Admin Account
+Admin role labels:
+  super_admin      ผู้ดูแลระบบสูงสุด
+  admin            ผู้ดูแลระบบ
+  property_manager ผู้ดูแลหอพัก
+```
+
+---
+
+## 16. Seed Data (`database/seed.sql` + `seed.js`)
+
+`seed.sql` is static (apartments, rooms, expense_settings). `seed.js` runs it then inserts admin + tenants + meter readings + bills with real bcrypt hashes.
+
+### Sample apartment
+
+```
+name             อพาร์ทเมนต์สุขสันต์
+address          123 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110
+contact_number   02-123-4567
+floors_count     5
+rooms_per_floor  8                       (40 rooms total)
+```
+
+Mark these rooms specially:
+
+```
+occupied:    101, 103, 205, 307, 410
+maintenance: 208
+common:      108
+caretaker:   501
+```
+
+### Sample expense_settings
+
+```
+water_price_per_unit:        18.00
+water_max_units:             9999
+electricity_price_per_unit:  7.50
+electricity_max_units:       9999
+invoice_footer_text:         'กรุณาชำระค่าเช่าภายในวันที่ 15 ของทุกเดือน
+                              หากชำระล่าช้าจะมีค่าปรับ 100 บาท/วัน'
+contract_terms:              ''  (empty — server returns DEFAULT_CONTRACT_TERMS)
+```
+
+### Admin account (created in `seed.js`)
+
+```
 username: admin
-password: admin1234  (bcrypt hashed)
-is_super_admin: true
+password: admin1234     (bcrypt hashed; salt rounds 10)
+is_super_admin: true, role: 'super_admin'
+```
 
-Sample Apartment
-name:            อพาร์ทเมนต์สุขสันต์
-address:         123 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110
-contact_number:  02-123-4567
-floors_count:    5
-rooms_per_floor: 8
+### Sample tenants
 
-Sample Rooms
-- Add tenants for all occupied rooms
-- full_name pattern: นายสมชาย ใจดี (room 103), etc.
-- national_id: unique 13-digit numbers
-- move_in_date: 2024-01-01
-- password_hash: bcrypt(national_id)
+```
+101  นายสมชาย ใจดี       1100100100011  081-111-1111
+103  นางสาวสมหญิง รักดี   1100100100022  081-222-2222
+205  นายวิชัย พากเพียร    1100100100033  081-333-3333
+307  นางนภา สุขใจ         1100100100044  081-444-4444
+410  นายธนา มั่งมี       1100100100055  081-555-5555
 
-Sample Tenants
-- Add tenants for all occupied rooms
-- full_name pattern: นายสมชาย ใจดี (room 103), etc.
-- national_id: unique 13-digit numbers
-- move_in_date: 2024-01-01
-- password_hash: bcrypt(national_id)
+password_hash = bcrypt(national_id, 10)
+move_in_date  = 2024-01-01
+is_active     = TRUE
+```
 
-Sample Expense Settings
-water_price_per_unit:       18.00
-water_max_units:            9999
-electricity_price_per_unit: 7.50
-electricity_max_units:      9999
-invoice_footer_text:        กรุณาชำระค่าเช่าภายในวันที่ 15 ของทุกเดือน
-                            หากชำระล่าช้าจะมีค่าปรับ 100 บาท/วัน
+### Sample meter readings + bills
 
-Sample Meter Readings & Bills (current month)							
-- Add meter readings for 5 occupied rooms
-- Add corresponding bills					
+For each tenant's room, current month/year:
 
-## Docker Configuration
-docker-compose.yml
-version: '3.8'
-services:
-  backend:
-    build: ./backend
-    ports:
-      - "5000:5000"
-    environment:
-      - NODE_ENV=production
-      - DB_HOST=neston.thddns.net
-      - DB_PORT=2009
-      - DB_USER=postgres
-      - DB_PASSWORD=LEpooh2901#
-      - DB_NAME=apartment_db
-      - JWT_SECRET=${JWT_SECRET}
-    depends_on: []
-    restart: unless-stopped
+```
+101: water 100→112,  elec 500→580
+103: water  90→ 98,  elec 420→470
+205: water 200→215,  elec 800→875
+307: water 150→162,  elec 600→660
+410: water  80→ 90,  elec 300→360
+```
 
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
-    restart: unless-stopped
+For each: compute `water_cost = (curr-last) * water_price`, `elec_cost = (curr-last) * elec_price`, `rent_cost = rooms.rental_price`, `total = water + elec + rent`, upsert into `bills`.
 
-## Build Order for AI Agent
-Execute in this exact order:
-PHASE 1 - DATABASE (do first)
-  1.  database/schema.sql
-  2.  database/seed.sql
-  3.  database/migrate.js
+---
 
-PHASE 2 - ROOT CONFIG
-  4.  .gitignore
-  5.  .env.example
-  6.  .env
-  7.  package.json (root)
+## 17. Deployment
 
-PHASE 3 - BACKEND
-  8.  backend/package.json
-  9.  backend/server.js
-  10. backend/config/database.js
-  11. backend/middleware/auth.js
-  12. backend/routes/auth.js
-  13. backend/routes/apartments.js
-  14. backend/routes/rooms.js
-  15. backend/routes/tenants.js
-  16. backend/routes/bills.js
-  17. backend/routes/settings.js
-  18. backend/utils/pdf.js
+### 17.1 `docker-compose.yml`
 
-PHASE 4 - FRONTEND
-  19. frontend/package.json
-  20. frontend/tailwind.config.js
-  21. frontend/postcss.config.js
-  22. frontend/public/index.html
-  23. frontend/src/index.js
-  24. frontend/src/App.jsx
-  25. frontend/src/context/AuthContext.jsx
-  26. frontend/src/utils/api.js
-  27. frontend/src/components/Layout.jsx
-  28. frontend/src/components/Sidebar.jsx
-  29. frontend/src/components/Navbar.jsx
-  30. frontend/src/components/PrivateRoute.jsx
-  31. frontend/src/components/common/Modal.jsx
-  32. frontend/src/components/common/Table.jsx
-  33. frontend/src/components/common/Badge.jsx
-  34. frontend/src/components/common/Spinner.jsx
-  35. frontend/src/components/common/Alert.jsx
-  36. frontend/src/pages/Login.jsx
-  37. frontend/src/pages/admin/Dashboard.jsx
-  38. frontend/src/pages/admin/Apartments.jsx
-  39. frontend/src/pages/admin/Rooms.jsx
-  40. frontend/src/pages/admin/Tenants.jsx
-  41. frontend/src/pages/admin/TenantForm.jsx
-  42. frontend/src/pages/admin/Billing.jsx
-  43. frontend/src/pages/admin/BillingForm.jsx
-  44. frontend/src/pages/admin/Invoice.jsx
-  45. frontend/src/pages/admin/Settings.jsx
-  46. frontend/src/pages/tenant/TenantDashboard.jsx
-  47. frontend/src/pages/tenant/TenantBills.jsx
-  48. frontend/src/pages/tenant/TenantContract.jsx
+Two services:
 
-PHASE 5 - DEPLOYMENT
-  49. backend/Dockerfile
-  50. frontend/Dockerfile
-  51. docker-compose.yml
+- `backend` — built from `backend/Dockerfile`, exposes 5000, env vars include DB connection, JWT, NODE_ENV, PORT.
+- `frontend` — multi-stage Dockerfile: build with CRA (passing `REACT_APP_API_URL` as a build arg), serve with `nginx:alpine`. The nginx config has a SPA fallback (`try_files $uri /index.html`) so router refreshes work.
 
-## Final Checklist Before Submitting Code
-□ All 51 files generated
-□ No hardcoded credentials (use process.env)
-□ All SQL uses parameterized queries
-□ Thai language used in all UI text
-□ Buddhist year (Gregorian + 543) used in PDFs
-□ Meter rollover logic implemented correctly
-□ Room number format correct (floor + LPAD seq)
-□ Bill upsert logic (create or edit) works
-□ Tenant default password = bcrypt(national_id)
-□ Room status updates on tenant add/moveout
-□ PDF generates for both A4 and A5
-□ JWT auth working for both admin and tenant
-□ All API error responses use { error: message }
-□ All API success responses use { data } or array
-□ Frontend shows loading states
-□ Frontend shows Thai error/success messages
-□ docker-compose.yml complete and working
+Both restart `unless-stopped`. Frontend depends on backend.
+
+### 17.2 GitHub Actions (`.github/workflows/deploy.yml`)
+
+Optional — kept simple. Build images, push, redeploy via SSH or registry. Provide secrets for `JWT_SECRET`, DB credentials, etc.
+
+### 17.3 Bringing up a fresh DB
+
+```bash
+# 1. Create the database (one time, as superuser)
+psql -U postgres -f database/bootstrap.sql
+
+# 2. Apply schema
+node database/migrate.js          # runs schema.sql (DROP + CREATE)
+
+# 3. Apply additive migrations (run in order on top of an existing DB)
+psql ... -f database/migrate-001-add-role.sql
+psql ... -f database/migrate-002-rooms-and-system.sql
+psql ... -f database/migrations/001_add_contract_terms.sql
+
+# 4. Seed sample data + admin account
+node database/seed.js
+```
+
+### 17.4 Local dev
+
+```bash
+npm run install:all
+npm run dev      # concurrent: backend nodemon (5000) + frontend CRA (3000)
+```
+
+---
+
+## 18. Implementation Checklist (build order)
+
+Build in this order; each row should be working before moving to the next.
+
+```
+PHASE 1 — DATABASE
+  database/schema.sql
+  database/migrate.js
+  database/seed.sql
+  database/seed.js
+  database/migrations/*.sql + migrate-001/-002 (additive)
+
+PHASE 2 — ROOT CONFIG
+  .gitignore, .env.example, .env, package.json, README.md
+
+PHASE 3 — BACKEND
+  backend/package.json
+  backend/server.js
+  backend/config/database.js
+  backend/middleware/auth.js
+  backend/utils/contractDefaults.js
+  backend/utils/mailer.js
+  backend/utils/pdf.js  (+ fonts/Sarabun-*.ttf)
+  backend/routes/auth.js
+  backend/routes/users.js
+  backend/routes/system-settings.js
+  backend/routes/apartments.js
+  backend/routes/rooms.js
+  backend/routes/tenants.js
+  backend/routes/bills.js
+  backend/routes/settings.js
+
+PHASE 4 — FRONTEND PRIMITIVES
+  frontend/package.json, tailwind.config.js, postcss.config.js
+  public/index.html (Google Fonts), src/index.{js,css}
+  src/utils/api.js
+  src/context/AuthContext.jsx
+  src/components/PrivateRoute.jsx
+  src/components/Layout.jsx, Sidebar.jsx, Navbar.jsx, ChangePasswordModal.jsx
+  src/components/common/{Modal,Table,Badge,Spinner,Alert}.jsx
+  src/App.jsx
+
+PHASE 5 — FRONTEND PUBLIC
+  pages/Login.jsx, ForgotPassword.jsx, ResetPassword.jsx
+
+PHASE 6 — FRONTEND ADMIN
+  pages/admin/Dashboard.jsx
+  pages/admin/Apartments.jsx
+  pages/admin/Rooms.jsx
+  pages/admin/Tenants.jsx, TenantForm.jsx
+  pages/admin/Billing.jsx, BillingForm.jsx, BillingImport.jsx
+  pages/admin/Invoice.jsx
+  pages/admin/Settings.jsx
+  pages/admin/Users.jsx
+  pages/admin/SystemSettings.jsx
+
+PHASE 7 — FRONTEND TENANT
+  pages/tenant/TenantDashboard.jsx
+  pages/tenant/TenantBills.jsx
+  pages/tenant/TenantContract.jsx
+  pages/tenant/TenantProfile.jsx
+
+PHASE 8 — DEPLOYMENT
+  backend/Dockerfile
+  frontend/Dockerfile  (multi-stage with nginx + SPA fallback)
+  docker-compose.yml
+  .github/workflows/deploy.yml (optional)
+```
+
+---
+
+## 19. Final Acceptance Checklist
+
+Before considering an implementation complete, verify:
+
+```
+□ schema.sql + all migrations apply cleanly to a fresh DB.
+□ All passwords (admin + tenant) are bcrypt hashed; never returned in any response.
+□ All SQL uses parameterized queries.
+□ All UI text and toasts are Thai. Dates render in Buddhist year.
+□ Room number = floor + LPAD(seq,2,'0') everywhere.
+□ Meter rollover formula matches §8.5 / §9.2.
+□ Bill upsert (room_id, month, year) works for both create and edit (server-side).
+□ Tenant default password = bcrypt(national_id). Admin can change a tenant nid AND opt-in
+  to reset the password to the new nid.
+□ Adding a tenant flips the room to 'occupied'; move-out flips it back to 'vacant'.
+□ Apartment delete preview returns counts; force-delete cascades and auto-moves-out actives.
+□ PDFs use Sarabun fonts (or Helvetica fallback).
+□ Bill invoice supports A4 + A5, Thai + English, single + bulk.
+□ Contract PDF uses expense_settings.contract_terms when present, else DEFAULT_CONTRACT_TERMS.
+□ Settings page pre-fills contract_terms textarea with defaults when empty; "คืนค่าเริ่มต้น"
+  resets it.
+□ Dashboard revenue card has 5 status checkboxes (default = occupied + caretaker) and
+  re-aggregates breakdown live; "รายได้รวม (ตามสถานะห้องที่เลือก)".
+□ Login tab switcher highlights the selected tab in dark brand color.
+□ Three admin roles function correctly:
+     property_manager only sees Print Invoice page;
+     admin sees everything except Users + System Settings;
+     super_admin sees everything.
+□ Forgot-password emails a single-use 1-hour token; reset-password updates the right user.
+□ SMTP settings (system_settings) take effect on next send; password masked in GET.
+□ JWT auth attached on every request; 401 redirects to /login.
+□ Frontend uses controlled forms, spinners, toasts.
+□ docker-compose up brings the system up end-to-end.
+```

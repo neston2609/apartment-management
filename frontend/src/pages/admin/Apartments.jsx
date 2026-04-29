@@ -5,6 +5,7 @@ import api, { unwrap } from '../../utils/api';
 import Modal from '../../components/common/Modal';
 import Table from '../../components/common/Table';
 import Spinner from '../../components/common/Spinner';
+import { useAuth } from '../../context/AuthContext';
 
 const EMPTY_FORM = {
     name: '', address: '', contact_number: '',
@@ -12,6 +13,9 @@ const EMPTY_FORM = {
 };
 
 export default function Apartments() {
+    const { user: me } = useAuth();
+    const isPropertyManager = me?.admin_role === 'property_manager';
+
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [open, setOpen] = useState(false);
@@ -100,12 +104,16 @@ export default function Apartments() {
                     <Link to={`/admin/rooms/${r.apartment_id}`} className="text-brand-600 hover:underline text-xs">
                         ห้องพัก / ตั้งราคา
                     </Link>
-                    <button onClick={() => startEdit(r)} className="text-slate-600 hover:underline text-xs">
-                        แก้ไข
-                    </button>
-                    <button onClick={() => startDelete(r)} className="text-red-600 hover:underline text-xs">
-                        ลบ
-                    </button>
+                    {!isPropertyManager && (
+                        <>
+                            <button onClick={() => startEdit(r)} className="text-slate-600 hover:underline text-xs">
+                                แก้ไข
+                            </button>
+                            <button onClick={() => startDelete(r)} className="text-red-600 hover:underline text-xs">
+                                ลบ
+                            </button>
+                        </>
+                    )}
                 </div>
             ),
         },
@@ -117,9 +125,11 @@ export default function Apartments() {
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-slate-800">อพาร์ทเมนต์</h1>
-                <button onClick={startCreate} className="bg-brand-600 hover:bg-brand-700 text-white text-sm px-3 py-2 rounded-md">
-                    เพิ่มอพาร์ทเมนต์
-                </button>
+                {!isPropertyManager && (
+                    <button onClick={startCreate} className="bg-brand-600 hover:bg-brand-700 text-white text-sm px-3 py-2 rounded-md">
+                        เพิ่มอพาร์ทเมนต์
+                    </button>
+                )}
             </div>
             <Table columns={columns} rows={items.map((i) => ({ ...i, id: i.apartment_id }))} />
 

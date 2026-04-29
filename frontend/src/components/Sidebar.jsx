@@ -21,6 +21,8 @@ const SUPER_ONLY_LINKS = [
 ];
 
 const PROPERTY_MANAGER_LINKS = [
+    { to: '/admin/apartments', label: 'อพาร์ทเมนต์',       icon: BuildingOffice2Icon },
+    { to: '/admin/tenants',    label: 'ผู้เช่า',            icon: UsersIcon },
     { to: '/admin/invoice',    label: 'พิมพ์ใบแจ้งหนี้',   icon: PrinterIcon },
 ];
 
