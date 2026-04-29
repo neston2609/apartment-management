@@ -56,7 +56,17 @@ export default function Invoice() {
     };
 
     const downloadAll = async () => {
-        for (const r of bills) if (r.bill?.bill_id) await downloadOne(r.bill.bill_id);
+        const ids = bills.filter((r) => r.bill?.bill_id).map((r) => r.bill.bill_id);
+        if (!ids.length) { toast.error('ไม่มีใบแจ้งหนี้ให้ดาวน์โหลด'); return; }
+        try {
+            const res = await api.post('/bills/bulk-pdf',
+                { bill_ids: ids, size, lang: 'th' },
+                { responseType: 'blob' });
+            const url = URL.createObjectURL(res.data);
+            window.open(url, '_blank');
+        } catch {
+            toast.error('สร้าง PDF รวมล้มเหลว');
+        }
     };
 
     const toggleStatus = (s) =>

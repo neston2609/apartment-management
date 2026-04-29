@@ -6,7 +6,7 @@ const db = require('../config/database');
 const { authenticate, adminOnly, requireAdminRoles } = require('../middleware/auth');
 const fullAdmin = requireAdminRoles('super_admin', 'admin');
 
-const { generateInvoicePDF, generateInvoicePDFEnglish } = require('../utils/pdf');
+const { generateInvoicePDF, generateInvoicePDFEnglish, generateInvoicePDFBulk } = require('../utils/pdf');
 
 // ---------- Helper: compute usage + cost ----------
 function computeBill(meter, settings, rentCost, otherCost = 0) {
@@ -46,7 +46,7 @@ router.get('/', authenticate, adminOnly, async (req, res) => {
         if (aptId) { params.push(aptId); where.push(`r.apartment_id = $${params.length}`); }
         const sql = `
             SELECT b.*,
-                   r.room_number, r.apartment_id, r.rental_price,
+                   r.room_number, r.apartment_id, r.rental_price, r.status,
                    t.full_name AS tenant_name
             FROM bills b
             JOIN rooms r ON r.room_id = b.room_id
@@ -350,5 +350,177 @@ router.get('/:id/pdf', authenticate, async (req, res) => {
         return res.status(500).json({ error: 'Failed to generate PDF' });
     }
 });
+
+
+// ---------- Bulk import from Excel ----------
+// Body: { apartment_id, month, year, rows: [{ room_no, water, electric, status?, notes? }] }
+router.post('/import', authenticate, adminOnly, fullAdmin, async (req, res) => {
+    const apartmentId = parseInt(req.body.apartment_id, 10);
+    const month       = parseInt(req.body.month, 10);
+    const year        = parseInt(req.body.year, 10);
+    const rows        = Array.isArray(req.body.rows) ? req.body.rows : [];
+
+    if (!apartmentId || !month || month < 1 || month > 12 || !year || !rows.length) {
+        return res.status(400).json({ error: 'apartment_id, month, year, rows required' });
+    }
+
+    const client = await db.getClient();
+    try {
+        await client.query('BEGIN');
+
+        // Settings + room map
+        const settings = (await client.query(
+            `SELECT * FROM expense_settings WHERE apartment_id = $1`, [apartmentId]
+        )).rows[0] || {
+            water_price_per_unit: 0, electricity_price_per_unit: 0,
+            water_max_units: 9999, electricity_max_units: 9999,
+        };
+        const roomRows = (await client.query(
+            `SELECT room_id, room_number, rental_price FROM rooms WHERE apartment_id = $1`,
+            [apartmentId]
+        )).rows;
+        const roomMap = new Map(roomRows.map((r) => [String(r.room_number).trim(), r]));
+
+        let imported = 0, updated = 0, skipped = 0;
+        const missingRooms = [];
+        const items = [];
+
+        for (const r of rows) {
+            const roomNo = String(r.room_no ?? '').trim();
+            const water  = Number(r.water);
+            const elec   = Number(r.electric);
+            if (!roomNo) { skipped++; continue; }
+            if (!Number.isFinite(water) || !Number.isFinite(elec)) { skipped++; continue; }
+
+            const room = roomMap.get(roomNo);
+            if (!room) { missingRooms.push(roomNo); skipped++; continue; }
+
+            // Prior meter reading (for this room, before target month/year)
+            const prior = (await client.query(
+                `SELECT water_units_current, electricity_units_current
+                 FROM meter_readings
+                 WHERE room_id = $1 AND (year < $2 OR (year = $2 AND month < $3))
+                 ORDER BY year DESC, month DESC LIMIT 1`,
+                [room.room_id, year, month]
+            )).rows[0];
+
+            const wLast = prior ? Number(prior.water_units_current) : 0;
+            const eLast = prior ? Number(prior.electricity_units_current) : 0;
+
+            const wUsage = Math.max(0, water - wLast);
+            const eUsage = Math.max(0, elec  - eLast);
+            const wCost  = +(wUsage * Number(settings.water_price_per_unit)).toFixed(2);
+            const eCost  = +(eUsage * Number(settings.electricity_price_per_unit)).toFixed(2);
+            const rent   = Number(room.rental_price) || 0;
+
+            // Existing bill & meter for this room/month/year
+            const existingBill = (await client.query(
+                `SELECT bill_id, other_cost FROM bills WHERE room_id = $1 AND month = $2 AND year = $3`,
+                [room.room_id, month, year]
+            )).rows[0];
+
+            const other = existingBill ? Number(existingBill.other_cost) : 0;
+            const total = +(wCost + eCost + rent + other).toFixed(2);
+
+            // Upsert meter_readings (overwrite current; preserve last from prior or compute)
+            await client.query(
+                `INSERT INTO meter_readings
+                 (room_id, month, year,
+                  water_units_last, water_units_current,
+                  electricity_units_last, electricity_units_current)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7)
+                 ON CONFLICT (room_id, month, year) DO UPDATE SET
+                     water_units_last          = EXCLUDED.water_units_last,
+                     water_units_current       = EXCLUDED.water_units_current,
+                     electricity_units_last    = EXCLUDED.electricity_units_last,
+                     electricity_units_current = EXCLUDED.electricity_units_current,
+                     updated_at = NOW()`,
+                [room.room_id, month, year, wLast, water, eLast, elec]
+            );
+
+            // Upsert bill
+            await client.query(
+                `INSERT INTO bills
+                 (room_id, month, year, water_cost, electricity_cost, rent_cost, other_cost, total_cost)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+                 ON CONFLICT (room_id, month, year) DO UPDATE SET
+                     water_cost       = EXCLUDED.water_cost,
+                     electricity_cost = EXCLUDED.electricity_cost,
+                     rent_cost        = EXCLUDED.rent_cost,
+                     total_cost       = EXCLUDED.total_cost,
+                     updated_at = NOW()`,
+                [room.room_id, month, year, wCost, eCost, rent, other, total]
+            );
+
+            if (existingBill) updated++; else imported++;
+            items.push({
+                room_no: roomNo, water_last: wLast, water_current: water, water_usage: wUsage, water_cost: wCost,
+                elec_last: eLast, elec_current: elec, elec_usage: eUsage, elec_cost: eCost,
+                rent, other, total, action: existingBill ? 'updated' : 'created',
+            });
+        }
+
+        await client.query('COMMIT');
+        return res.json({
+            data: {
+                summary: {
+                    rows_in:  rows.length,
+                    imported, updated, skipped,
+                    missing_rooms: [...new Set(missingRooms)],
+                },
+                items,
+            },
+        });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('[bills/import]', err);
+        return res.status(500).json({ error: 'Import failed: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
+
+
+// ---------- Bulk PDF (single file, many bills) ----------
+// POST /api/bills/bulk-pdf  body: { bill_ids: [int...], size?: 'A4'|'A5', lang?: 'th'|'en' }
+router.post('/bulk-pdf', authenticate, adminOnly, async (req, res) => {
+    try {
+        const ids   = Array.isArray(req.body.bill_ids) ? req.body.bill_ids.map((x) => parseInt(x, 10)).filter(Boolean) : [];
+        const size  = (req.body.size || 'A5').toUpperCase() === 'A4' ? 'A4' : 'A5';
+        const lang  = (req.body.lang || 'th').toLowerCase() === 'en' ? 'en' : 'th';
+        if (!ids.length) return res.status(400).json({ error: 'bill_ids required' });
+
+        const { rows } = await db.query(`
+            SELECT b.*,
+                   r.room_number, r.apartment_id,
+                   t.full_name AS tenant_name,
+                   m.water_units_last, m.water_units_current,
+                   m.electricity_units_last, m.electricity_units_current,
+                   a.name AS apartment_name, a.address AS apartment_address,
+                   a.contact_number AS apartment_phone,
+                   s.water_price_per_unit, s.electricity_price_per_unit, s.invoice_footer_text
+            FROM bills b
+            JOIN rooms r       ON r.room_id = b.room_id
+            JOIN apartments a  ON a.apartment_id = r.apartment_id
+            LEFT JOIN tenants t ON t.room_id = r.room_id AND t.is_active = TRUE
+            LEFT JOIN meter_readings m
+              ON m.room_id = b.room_id AND m.month = b.month AND m.year = b.year
+            LEFT JOIN expense_settings s ON s.apartment_id = r.apartment_id
+            WHERE b.bill_id = ANY($1::int[])
+            ORDER BY r.apartment_id, r.room_number
+        `, [ids]);
+
+        if (!rows.length) return res.status(404).json({ error: 'No bills found' });
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="bills_bulk_${size}_${lang}.pdf"`);
+        generateInvoicePDFBulk(rows, size, lang, res);
+    } catch (err) {
+        console.error('[bills/bulk-pdf]', err);
+        return res.status(500).json({ error: 'Failed to generate bulk PDF' });
+    }
+});
+
 
 module.exports = router;

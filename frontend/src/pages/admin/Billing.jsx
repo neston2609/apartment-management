@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear } from '../../utils/api';
 import Spinner from '../../components/common/Spinner';
 import Badge from '../../components/common/Badge';
+import BillingImport from './BillingImport';
 
 const now = new Date();
 
@@ -15,6 +16,17 @@ export default function Billing() {
     const [rooms, setRooms]   = useState([]);
     const [bills, setBills]   = useState([]);
     const [loading, setLoading] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
+
+    const reload = () => {
+        if (!aptId) return;
+        setLoading(true);
+        Promise.all([
+            unwrap(api.get(`/apartments/${aptId}/rooms`)),
+            unwrap(api.get('/bills', { params: { apartment_id: aptId, month, year } })),
+        ]).then(([r, b]) => { setRooms(r || []); setBills(b || []); })
+          .finally(() => setLoading(false));
+    };
 
     useEffect(() => {
         unwrap(api.get('/apartments')).then((r) => {
@@ -40,7 +52,13 @@ export default function Billing() {
 
     return (
         <div className="space-y-4">
-            <h1 className="text-2xl font-bold text-slate-800">ใบแจ้งค่าเช่า</h1>
+            <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-bold text-slate-800">ใบแจ้งค่าเช่า</h1>
+                <button onClick={() => setImportOpen(true)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 py-2 rounded-md">
+                    นำเข้าจาก Excel
+                </button>
+            </div>
 
             <div className="bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap gap-3 items-center text-sm">
                 <select value={aptId} onChange={(e) => setAptId(e.target.value)}
@@ -98,6 +116,16 @@ export default function Billing() {
                     </div>
                 )
             }
+
+            {importOpen && aptId && (
+                <BillingImport
+                    apartmentId={parseInt(aptId, 10)}
+                    defaultMonth={month}
+                    defaultYear={year}
+                    onClose={() => setImportOpen(false)}
+                    onDone={reload}
+                />
+            )}
         </div>
     );
 }

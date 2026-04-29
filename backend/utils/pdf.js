@@ -3,6 +3,7 @@
  *   - Rental contract (A4, Thai)
  *   - Bill invoice — Thai landscape (A4 / A5, default A5)
  *   - Bill invoice — English landscape (A4 / A5, default A5)
+ *   - Bill invoice — bulk multi-page (single PDF, many bills)
  */
 const fs   = require('fs');
 const path = require('path');
@@ -29,16 +30,14 @@ function applyFonts(doc) {
         doc.registerFont('thai',      'Helvetica');
         doc.registerFont('thai-bold', 'Helvetica-Bold');
     }
+    doc.registerFont('reg',  'Helvetica');
+    doc.registerFont('bold', 'Helvetica-Bold');
     doc.font('thai');
 }
 
 function thaiYear(g) { return Number(g) + 543; }
 function fmtMoney(n) {
     return Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function fmtUnits(n) {
-    if (n === null || n === undefined || n === '') return '-';
-    return Math.trunc(Number(n)).toLocaleString('en-US');
 }
 function intStr(n) {
     if (n === null || n === undefined || n === '') return '';
@@ -68,10 +67,9 @@ function generateContractPDF(t, stream) {
     if (t.apartment_phone) doc.text(`โทร: ${t.apartment_phone}`, { align: 'center' });
     doc.moveDown(1);
 
-    const today = new Date();
     doc.fontSize(11);
     doc.text(`ทำที่: ${t.apartment_address || '-'}`);
-    doc.text(`วันที่: ${fmtThaiDate(today)}`);
+    doc.text(`วันที่: ${fmtThaiDate(new Date())}`);
     doc.moveDown(0.5);
 
     doc.font('thai-bold').text('คู่สัญญา');
@@ -91,7 +89,7 @@ function generateContractPDF(t, stream) {
 
     doc.font('thai-bold').text('ข้อตกลงและเงื่อนไข');
     doc.font('thai').fontSize(10);
-    const terms = [
+    [
         '1. ผู้เช่าตกลงชำระค่าเช่าภายในวันที่ 5 ของทุกเดือน',
         '2. ผู้เช่าต้องรักษาทรัพย์สินภายในห้องพักให้อยู่ในสภาพดี',
         '3. ห้ามนำสัตว์เลี้ยงทุกชนิดเข้าพักโดยไม่ได้รับอนุญาต',
@@ -102,8 +100,7 @@ function generateContractPDF(t, stream) {
         '8. ผู้เช่าต้องส่งคืนห้องพักในสภาพเรียบร้อยเมื่อสิ้นสุดสัญญา',
         '9. การกระทำใด ๆ ที่ขัดต่อสัญญาฉบับนี้ ผู้ให้เช่ามีสิทธิ์บอกเลิกสัญญาได้ทันที',
         '10. คู่สัญญาทั้งสองฝ่ายได้อ่านและเข้าใจข้อตกลงทั้งหมดแล้ว',
-    ];
-    terms.forEach((line) => doc.text(line, { paragraphGap: 4 }));
+    ].forEach((line) => doc.text(line, { paragraphGap: 4 }));
     doc.moveDown(2);
 
     doc.fontSize(11);
@@ -116,21 +113,19 @@ function generateContractPDF(t, stream) {
     doc.end();
 }
 
-// ===== Invoice (Thai LANDSCAPE, default A5) =====
-function generateInvoicePDF(b, size, stream) {
-    const pageSize = size === 'A4' ? 'A4' : 'A5';
-    const doc = new PDFDocument({ size: pageSize, layout: 'landscape', margin: 28 });
-    applyFonts(doc);
-    doc.pipe(stream);
-
-    const M = 28;
-    const pageW = doc.page.width;
+// =====================================================
+// Render ONE invoice page on the given doc.
+// Used by both single-bill and bulk-PDF generators.
+// =====================================================
+function drawInvoiceThai(doc, b) {
+    const M       = 28;
+    const pageW   = doc.page.width;
     const usableW = pageW - M * 2;
-    const BLUE = '#0000ff';
-    const WHITE = '#ffffff';
+    const BLUE    = '#0000ff';
+    const WHITE   = '#ffffff';
 
     const mmPadded = String(b.month).padStart(2, '0');
-    const billNo = `${b.year}${mmPadded}${b.room_number || ''}`;
+    const billNo   = `${b.year}${mmPadded}${b.room_number || ''}`;
 
     doc.fillColor('black').font('thai').fontSize(11)
        .text(`บิลเลขที่      ${billNo}`, M, M, { width: usableW, align: 'right' });
@@ -186,9 +181,9 @@ function generateInvoicePDF(b, size, stream) {
         : Number(b.electricity_units_current) - Number(b.electricity_units_last);
 
     const dataRows = [
-        { label: 'ค่าน้ำ',  last: intStr(b.water_units_last), cur: intStr(b.water_units_current),
+        { label: 'ค่าน้ำ', last: intStr(b.water_units_last), cur: intStr(b.water_units_current),
           units: intStr(wUsage), rate: intStr(b.water_price_per_unit), amount: intStr(b.water_cost) },
-        { label: 'ค่าไฟ',  last: intStr(b.electricity_units_last), cur: intStr(b.electricity_units_current),
+        { label: 'ค่าไฟ', last: intStr(b.electricity_units_last), cur: intStr(b.electricity_units_current),
           units: intStr(eUsage), rate: intStr(b.electricity_price_per_unit), amount: intStr(b.electricity_cost) },
         { label: 'ค่าเช่าห้อง',         last: '', cur: '', units: '', rate: '', amount: intStr(b.rent_cost) },
         { label: 'ค่าโทรศัพท์ และอื่นๆ', last: '', cur: '', units: '', rate: '', amount: intStr(b.other_cost) },
@@ -218,29 +213,20 @@ function generateInvoicePDF(b, size, stream) {
         doc.fillColor('#475569').font('thai').fontSize(10)
            .text(b.invoice_footer_text, M, rowY + 14, { width: usableW, align: 'left' });
     }
-
-    doc.end();
+    doc.fillColor('black');
 }
 
-// ===== Invoice (English LANDSCAPE) — kept as alt for lang=en =====
-function generateInvoicePDFEnglish(b, size, stream) {
-    const pageSize = size === 'A4' ? 'A4' : 'A5';
-    const doc = new PDFDocument({ size: pageSize, layout: 'landscape', margin: 28 });
-    doc.registerFont('reg',  'Helvetica');
-    doc.registerFont('bold', 'Helvetica-Bold');
-    doc.font('reg');
-    doc.pipe(stream);
-
-    const M = 28;
-    const pageW = doc.page.width;
+function drawInvoiceEnglish(doc, b) {
+    const M       = 28;
+    const pageW   = doc.page.width;
     const usableW = pageW - M * 2;
-    const BLUE = '#0000ff';
-    const WHITE = '#ffffff';
+    const BLUE    = '#0000ff';
+    const WHITE   = '#ffffff';
 
     const mmPadded = String(b.month).padStart(2, '0');
-    const billNo = `${b.year}${mmPadded}${b.room_number || ''}`;
+    const billNo   = `${b.year}${mmPadded}${b.room_number || ''}`;
 
-    doc.fillColor('black').fontSize(11)
+    doc.fillColor('black').font('reg').fontSize(11)
        .text(`Invoice #      ${billNo}`, M, M, { width: usableW, align: 'right' });
 
     doc.moveDown(0.6);
@@ -293,10 +279,9 @@ function generateInvoicePDFEnglish(b, size, stream) {
           units: intStr(wUsage), rate: intStr(b.water_price_per_unit), amount: intStr(b.water_cost) },
         { label: 'Electricity', last: intStr(b.electricity_units_last), cur: intStr(b.electricity_units_current),
           units: intStr(eUsage), rate: intStr(b.electricity_price_per_unit), amount: intStr(b.electricity_cost) },
-        { label: 'Room rent',   last: '', cur: '', units: '', rate: '', amount: intStr(b.rent_cost) },
-        { label: 'Other',       last: '', cur: '', units: '', rate: '', amount: intStr(b.other_cost) },
+        { label: 'Room rent', last: '', cur: '', units: '', rate: '', amount: intStr(b.rent_cost) },
+        { label: 'Other',     last: '', cur: '', units: '', rate: '', amount: intStr(b.other_cost) },
     ];
-
     const rowH = 26;
     doc.fillColor('black').font('reg').fontSize(11);
     rows.forEach((r) => {
@@ -319,8 +304,48 @@ function generateInvoicePDFEnglish(b, size, stream) {
         doc.fillColor('#475569').font('reg').fontSize(10)
            .text(b.invoice_footer_text, M, rowY + 14, { width: usableW, align: 'left' });
     }
+    doc.fillColor('black');
+}
 
+function pageOpts(size) {
+    return { size: size === 'A4' ? 'A4' : 'A5', layout: 'landscape', margin: 28 };
+}
+
+// ===== Single bill — Thai or English =====
+function generateInvoicePDF(b, size, stream) {
+    const doc = new PDFDocument(pageOpts(size));
+    applyFonts(doc);
+    doc.pipe(stream);
+    drawInvoiceThai(doc, b);
     doc.end();
 }
 
-module.exports = { generateContractPDF, generateInvoicePDF, generateInvoicePDFEnglish };
+function generateInvoicePDFEnglish(b, size, stream) {
+    const doc = new PDFDocument(pageOpts(size));
+    applyFonts(doc);
+    doc.pipe(stream);
+    drawInvoiceEnglish(doc, b);
+    doc.end();
+}
+
+// ===== Bulk: many bills → one PDF, one bill per page =====
+function generateInvoicePDFBulk(bills, size, lang, stream) {
+    const opts = pageOpts(size);
+    const doc = new PDFDocument(opts);
+    applyFonts(doc);
+    doc.pipe(stream);
+
+    const drawer = lang === 'en' ? drawInvoiceEnglish : drawInvoiceThai;
+    bills.forEach((b, i) => {
+        if (i > 0) doc.addPage(opts);
+        drawer(doc, b);
+    });
+    doc.end();
+}
+
+module.exports = {
+    generateContractPDF,
+    generateInvoicePDF,
+    generateInvoicePDFEnglish,
+    generateInvoicePDFBulk,
+};
