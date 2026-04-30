@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear } from '../../utils/api';
+import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear, defaultReportingMonth } from '../../utils/api';
 import Spinner from '../../components/common/Spinner';
 
 const STAT_LABELS = {
@@ -22,8 +22,9 @@ const DEFAULT_REVENUE_STATUSES = ['occupied', 'caretaker'];
 
 export default function Dashboard() {
     const now = new Date();
-    const [month, setMonth] = useState(now.getMonth() + 1);
-    const [year,  setYear]  = useState(now.getFullYear());
+    const initial = defaultReportingMonth(now);
+    const [month, setMonth] = useState(initial.month);
+    const [year,  setYear]  = useState(initial.year);
 
     const [apts, setApts]   = useState([]);
     const [bills, setBills] = useState([]);

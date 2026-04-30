@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear } from '../../utils/api';
+import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear, defaultReportingMonth } from '../../utils/api';
 import Spinner from '../../components/common/Spinner';
 
 export default function TenantBills() {
-    const now = new Date();
+    const period = defaultReportingMonth();
     const [allBills, setAllBills] = useState([]);
-    const [year, setYear]         = useState(now.getFullYear());
+    const [year, setYear]         = useState(period.year);
     const [loading, setLoading]   = useState(true);
 
     useEffect(() => {
@@ -16,26 +16,25 @@ export default function TenantBills() {
             .finally(() => setLoading(false));
     }, []);
 
-    // Years actually present in the data, plus the current year
+    // Years actually present in the data, plus the default reporting year
     const yearOptions = useMemo(() => {
-        const s = new Set([now.getFullYear()]);
+        const s = new Set([period.year]);
         allBills.forEach((b) => s.add(Number(b.year)));
         return [...s].sort((a, b) => b - a);
-    }, [allBills, now]);
+    }, [allBills, period.year]);
 
-    // Filter by selected year, sort: current month first, then descending by month
+    // Filter by selected year, sort: "current period" first, then descending by month
     const visible = useMemo(() => {
         const filtered = allBills.filter((b) => Number(b.year) === Number(year));
-        const cur = now.getMonth() + 1;
         return filtered.sort((a, b) => {
-            // Current month always at top when looking at current year
-            if (Number(year) === now.getFullYear()) {
-                if (a.month === cur && b.month !== cur) return -1;
-                if (b.month === cur && a.month !== cur) return  1;
+            // Default reporting month always at top when looking at its year
+            if (Number(year) === period.year) {
+                if (a.month === period.month && b.month !== period.month) return -1;
+                if (b.month === period.month && a.month !== period.month) return  1;
             }
             return Number(b.month) - Number(a.month);
         });
-    }, [allBills, year, now]);
+    }, [allBills, year, period.month, period.year]);
 
     const downloadPdf = async (id, size = 'A5', lang = 'th') => {
         try {
@@ -80,7 +79,7 @@ export default function TenantBills() {
                     </thead>
                     <tbody>
                         {visible.map((b) => {
-                            const isCurrent = b.month === (now.getMonth() + 1) && Number(b.year) === now.getFullYear();
+                            const isCurrent = b.month === period.month && Number(b.year) === period.year;
                             return (
                                 <tr key={b.bill_id}
                                     className={`border-t border-slate-100 ${isCurrent ? 'bg-blue-50/40' : ''}`}>

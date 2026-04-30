@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear } from '../../utils/api';
+import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear, defaultReportingMonth } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import Spinner from '../../components/common/Spinner';
 
@@ -8,7 +8,7 @@ export default function TenantDashboard() {
     const { user } = useAuth();
     const [bills, setBills] = useState([]);
     const [loading, setLoading] = useState(true);
-    const now = new Date();
+    const period = defaultReportingMonth();
 
     useEffect(() => {
         unwrap(api.get('/bills/tenant/me'))
@@ -18,7 +18,7 @@ export default function TenantDashboard() {
 
     if (loading) return <div className="grid place-items-center h-64"><Spinner /></div>;
 
-    const current = bills.find((b) => b.month === now.getMonth() + 1 && b.year === now.getFullYear());
+    const current = bills.find((b) => b.month === period.month && b.year === period.year);
 
     return (
         <div className="space-y-6">
@@ -29,7 +29,7 @@ export default function TenantDashboard() {
 
             <div className="bg-white border border-slate-200 rounded-lg p-5">
                 <p className="text-xs text-slate-500">
-                    ใบแจ้งหนี้ประจำเดือน {THAI_MONTHS[now.getMonth()]} {thaiYear(now.getFullYear())}
+                    ใบแจ้งหนี้ประจำเดือน {THAI_MONTHS[period.month - 1]} {thaiYear(period.year)}
                 </p>
                 {current ? (
                     <>

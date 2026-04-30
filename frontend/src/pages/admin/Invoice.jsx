@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear } from '../../utils/api';
+import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear, defaultReportingMonth } from '../../utils/api';
 import Spinner from '../../components/common/Spinner';
 
 const ALL_STATUSES = ['occupied', 'caretaker', 'maintenance', 'common', 'vacant'];
@@ -8,13 +8,13 @@ const STATUS_LABELS = {
     occupied: 'มีผู้เช่า', caretaker: 'ผู้ดูแล',
     maintenance: 'ซ่อมบำรุง', common: 'ส่วนกลาง', vacant: 'ว่าง',
 };
-const now = new Date();
+const DEFAULT_PERIOD = defaultReportingMonth();
 
 export default function Invoice() {
     const [apts, setApts]   = useState([]);
     const [aptId, setAptId] = useState('');
-    const [month, setMonth] = useState(now.getMonth() + 1);
-    const [year, setYear]   = useState(now.getFullYear());
+    const [month, setMonth] = useState(DEFAULT_PERIOD.month);
+    const [year, setYear]   = useState(DEFAULT_PERIOD.year);
     const [size, setSize]   = useState('A5');
     const [statuses, setStatuses] = useState(['occupied', 'caretaker']);
     const [bills, setBills] = useState([]);

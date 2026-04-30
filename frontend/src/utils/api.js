@@ -56,3 +56,20 @@ export const fmtThaiDate = (input) => {
     const yy = d.getFullYear() + 543;
     return `${dd}/${mm}/${yy}`;
 };
+
+/**
+ * Default "reporting month" rule used as the initial month/year filter
+ * across the app:
+ *   - Before the 25th of the calendar month → previous month.
+ *   - On/after the 25th                      → current month.
+ * Example: 24 Apr → { month: 3, year: 2026 }; 25 Apr → { month: 4, year: 2026 }.
+ */
+export const defaultReportingMonth = (now = new Date()) => {
+    let m = now.getMonth() + 1;   // 1..12
+    let y = now.getFullYear();
+    if (now.getDate() < 25) {
+        m -= 1;
+        if (m === 0) { m = 12; y -= 1; }
+    }
+    return { month: m, year: y };
+};

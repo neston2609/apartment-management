@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear } from '../../utils/api';
+import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear, defaultReportingMonth } from '../../utils/api';
 import Spinner from '../../components/common/Spinner';
 import Badge from '../../components/common/Badge';
 import BillingImport from './BillingImport';
 
-const today = new Date();
+const DEFAULT_PERIOD = defaultReportingMonth();
 
 /**
  * Derive a bill's payment status.
@@ -48,12 +48,13 @@ function paymentStatus(bill, now = new Date()) {
 export default function Billing() {
     const [apts, setApts]     = useState([]);
     const [aptId, setAptId]   = useState('');
-    const [month, setMonth]   = useState(today.getMonth() + 1);
-    const [year, setYear]     = useState(today.getFullYear());
+    const [month, setMonth]   = useState(DEFAULT_PERIOD.month);
+    const [year, setYear]     = useState(DEFAULT_PERIOD.year);
     const [rooms, setRooms]   = useState([]);
     const [bills, setBills]   = useState([]);
     const [loading, setLoading] = useState(false);
     const [busyId, setBusyId]   = useState(null);
+    const [bulkBusy, setBulkBusy] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
 
     const reload = () => {
@@ -96,14 +97,51 @@ export default function Billing() {
         } finally { setBusyId(null); }
     };
 
+    const bulkMarkPaid = async () => {
+        if (!aptId) return;
+        const aptName = apts.find((a) => String(a.apartment_id) === String(aptId))?.name || '';
+        const ok = window.confirm(
+            `ทำเครื่องหมาย "ชำระแล้ว" ให้กับทุกห้องที่ยังไม่ชำระ\n` +
+            `อพาร์ทเมนต์: ${aptName}\n` +
+            `ประจำเดือน ${THAI_MONTHS[month - 1]} ${thaiYear(year)}\n\n` +
+            `ห้องที่ชำระไปแล้วจะไม่ถูกแก้ไข ดำเนินการต่อ?`
+        );
+        if (!ok) return;
+        setBulkBusy(true);
+        try {
+            const res = await unwrap(api.post('/bills/bulk-mark-paid', {
+                apartment_id: parseInt(aptId, 10),
+                month, year,
+            }));
+            const n = res?.marked_count ?? 0;
+            if (n === 0) toast('ไม่มีบิลที่ค้างชำระให้ทำเครื่องหมาย', { icon: 'ℹ️' });
+            else toast.success(`ทำเครื่องหมายชำระแล้ว ${n} ห้อง`);
+            await reload();
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'ทำเครื่องหมายล้มเหลว');
+        } finally { setBulkBusy(false); }
+    };
+
+    // Count how many bills are still unpaid for the current view
+    const unpaidCount = bills.filter((b) => !b.paid_at).length;
+
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
                 <h1 className="text-2xl font-bold text-slate-800">ใบแจ้งค่าเช่า</h1>
-                <button onClick={() => setImportOpen(true)}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 py-2 rounded-md">
-                    นำเข้าจาก Excel
-                </button>
+                <div className="flex flex-wrap gap-2">
+                    <button onClick={bulkMarkPaid}
+                            disabled={bulkBusy || unpaidCount === 0}
+                            className="bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-2 rounded-md disabled:opacity-50">
+                        {bulkBusy
+                            ? 'กำลังบันทึก...'
+                            : `✓ ชำระแล้วทุกห้อง${unpaidCount > 0 ? ` (${unpaidCount})` : ''}`}
+                    </button>
+                    <button onClick={() => setImportOpen(true)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 py-2 rounded-md">
+                        นำเข้าจาก Excel
+                    </button>
+                </div>
             </div>
 
             <div className="bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap gap-3 items-center text-sm">

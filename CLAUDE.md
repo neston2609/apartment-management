@@ -488,6 +488,7 @@ All responses use the envelope `{ data: ... }` for success and `{ error: 'messag
 | PUT    | `/:id`                            | super_admin, admin |
 | POST   | `/:id/mark-paid`                  | super_admin, admin |
 | POST   | `/:id/mark-unpaid`                | super_admin, admin |
+| POST   | `/bulk-mark-paid`                 | super_admin, admin |
 | GET    | `/meter/:room_id?month=&year=`    | any admin |
 | GET    | `/tenant/me`                      | tenant — list own bills |
 | GET    | `/:id/pdf?size=A4|A5&lang=th|en`  | admin OR tenant if same room |
@@ -497,6 +498,8 @@ All responses use the envelope `{ data: ... }` for success and `{ error: 'messag
 `GET /` returns each bill enriched with `r.room_number, r.apartment_id, r.rental_price, r.status, t.full_name AS tenant_name, s.payment_due_day, s.late_fee_per_day`. The dashboard relies on `r.status` to filter by room status; the Billing page derives payment status from `b.paid_at` + `s.payment_due_day` + `s.late_fee_per_day`.
 
 `POST /:id/mark-paid` body (optional): `{ paid_at }` (ISO timestamp; defaults to NOW). Sets `bills.paid_at` to that value. `POST /:id/mark-unpaid` clears `bills.paid_at` back to NULL. Both preserve all cost columns and `total_cost`.
+
+`POST /bulk-mark-paid` body: `{ apartment_id, month, year, paid_at? }`. **Idempotent**: marks every still-unpaid bill (`paid_at IS NULL`) for that apartment+month+year as paid; bills that were already paid are not touched (their original `paid_at` is preserved). Response: `{ marked_count, bills, paid_at }`.
 
 The bill upsert paths (`POST /` and `PUT /:id`) **do not touch `paid_at`** — editing/recalculating a bill never changes its payment state.
 
@@ -633,7 +636,13 @@ nodemailer.createTransport({
 
 14. **Contract terms (`contract_terms`)** — stored as a single TEXT field; one rule per line. The PDF splits on `\r?\n`, trims, drops empty lines. If empty/null, fall back to `DEFAULT_CONTRACT_TERMS` (see §10).
 
-15. **Bill payment status** — derived client-side from `bills.paid_at` + `expense_settings.payment_due_day` + `expense_settings.late_fee_per_day`:
+15. **Default reporting month** (`defaultReportingMonth(now)` in `frontend/src/utils/api.js`) — used as the initial `{ month, year }` filter in **every page that has a month picker** (Dashboard, Billing, Invoice, TenantDashboard, TenantBills):
+    - If `now.getDate() < 25` → previous calendar month (handle Jan 24 → Dec of previous year).
+    - If `now.getDate() >= 25` → current calendar month.
+    - Example: 24 Apr 2026 → `{ month: 3, year: 2026 }`; 25 Apr 2026 → `{ month: 4, year: 2026 }`.
+    - The user can still change the picker manually after page load.
+
+16. **Bill payment status** — derived client-side from `bills.paid_at` + `expense_settings.payment_due_day` + `expense_settings.late_fee_per_day`:
     - `paid_at` set                                  → **"ชำระค่าเช่าแล้ว"** (green)
     - unpaid AND `payment_due_day` is null/absent    → **"ออกบิลแล้ว"** (blue)
     - unpaid AND today ≤ due date                    → **"รอชำระ"** (amber)
@@ -871,7 +880,9 @@ Listing page:
 - Action column shows `สร้าง` / `แก้ไข` link, plus an inline button:
    - Bill exists, unpaid → `✓ ทำเครื่องหมายชำระแล้ว` (green) → `POST /bills/:id/mark-paid`.
    - Bill exists, paid → `ยกเลิกการชำระ` (slate) → `POST /bills/:id/mark-unpaid`.
-- "นำเข้าจาก Excel" button opens `BillingImport.jsx` modal.
+- Header has two top-level buttons:
+   - **"✓ ชำระแล้วทุกห้อง (N)"** (green) — calls `POST /bills/bulk-mark-paid` for the current `apartment_id, month, year`. The trailing `(N)` shows how many bills are still unpaid in the current view; the button is disabled when `N === 0`. Confirms via `window.confirm` that includes the apartment + period before sending.
+   - **"นำเข้าจาก Excel"** opens `BillingImport.jsx`.
 
 `BillingForm` (route `/admin/billing/:roomId/:month/:year`):
 - Pre-loads room (`GET /rooms/:id`), settings (`GET /settings/:apt`), prior meter (`GET /bills/meter/:roomId?month=&year=`), and any existing bill (`GET /bills?...`).
@@ -1262,6 +1273,12 @@ Before considering an implementation complete, verify:
      unpaid + before due → "รอชำระ"; unpaid + after due → "เกินกำหนด" with late fee.
 □ POST /bills/:id/mark-paid and /mark-unpaid update bills.paid_at without
   touching cost columns or total_cost.
+□ POST /bills/bulk-mark-paid is idempotent: marks all WHERE paid_at IS NULL
+  for the apartment+month+year; rows already paid keep their original paid_at.
+□ Billing page shows "✓ ชำระแล้วทุกห้อง (N)" header button that calls bulk-mark-paid.
+□ Default reporting month: defaultReportingMonth() in utils/api.js — before the 25th
+  shows previous month, on/after the 25th shows current month. Used in Dashboard,
+  Billing, Invoice, TenantDashboard, TenantBills.
 □ Settings page exposes payment_due_day (1-31, optional) and late_fee_per_day.
 □ Settings page pre-fills contract_terms textarea with defaults when empty; "คืนค่าเริ่มต้น"
   resets it.
