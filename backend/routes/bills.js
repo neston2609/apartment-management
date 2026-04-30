@@ -44,13 +44,17 @@ router.get('/', authenticate, adminOnly, async (req, res) => {
         if (month) { params.push(month); where.push(`b.month = $${params.length}`); }
         if (year)  { params.push(year);  where.push(`b.year  = $${params.length}`); }
         if (aptId) { params.push(aptId); where.push(`r.apartment_id = $${params.length}`); }
+        // Include expense_settings so the frontend can derive payment status
+        // (รอชำระ / เกินกำหนด) and late fee per day.
         const sql = `
             SELECT b.*,
                    r.room_number, r.apartment_id, r.rental_price, r.status,
-                   t.full_name AS tenant_name
+                   t.full_name AS tenant_name,
+                   s.payment_due_day, s.late_fee_per_day
             FROM bills b
             JOIN rooms r ON r.room_id = b.room_id
             LEFT JOIN tenants t ON t.room_id = r.room_id AND t.is_active = TRUE
+            LEFT JOIN expense_settings s ON s.apartment_id = r.apartment_id
             ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
             ORDER BY r.apartment_id, r.room_number
         `;
@@ -480,6 +484,83 @@ router.post('/import', authenticate, adminOnly, fullAdmin, async (req, res) => {
     }
 });
 
+
+
+// ---------- Mark a bill as paid / unpaid ----------
+// POST /api/bills/:id/mark-paid    body: { paid_at? }  (defaults to NOW)
+// POST /api/bills/:id/mark-unpaid
+router.post('/:id/mark-paid', authenticate, adminOnly, fullAdmin, async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const when = req.body?.paid_at ? new Date(req.body.paid_at) : new Date();
+        if (Number.isNaN(when.getTime())) {
+            return res.status(400).json({ error: 'Invalid paid_at' });
+        }
+        const { rows } = await db.query(
+            `UPDATE bills SET paid_at = $1, updated_at = NOW()
+             WHERE bill_id = $2
+             RETURNING bill_id, room_id, month, year, paid_at`,
+            [when.toISOString(), id]
+        );
+        if (!rows.length) return res.status(404).json({ error: 'Bill not found' });
+        return res.json({ data: rows[0] });
+    } catch (err) {
+        console.error('[bills/mark-paid]', err);
+        return res.status(500).json({ error: 'Failed to mark paid' });
+    }
+});
+
+router.post('/:id/mark-unpaid', authenticate, adminOnly, fullAdmin, async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { rows } = await db.query(
+            `UPDATE bills SET paid_at = NULL, updated_at = NOW()
+             WHERE bill_id = $1
+             RETURNING bill_id, room_id, month, year, paid_at`,
+            [id]
+        );
+        if (!rows.length) return res.status(404).json({ error: 'Bill not found' });
+        return res.json({ data: rows[0] });
+    } catch (err) {
+        console.error('[bills/mark-unpaid]', err);
+        return res.status(500).json({ error: 'Failed to mark unpaid' });
+    }
+});
+
+// Bulk mark every unpaid bill for an apartment+month+year as paid.
+// Idempotent: rows that are already paid are not touched (paid_at preserved).
+// POST /api/bills/bulk-mark-paid  body: { apartment_id, month, year, paid_at? }
+router.post('/bulk-mark-paid', authenticate, adminOnly, fullAdmin, async (req, res) => {
+    try {
+        const aptId = parseInt(req.body?.apartment_id, 10);
+        const month = parseInt(req.body?.month, 10);
+        const year  = parseInt(req.body?.year, 10);
+        if (!aptId || !month || month < 1 || month > 12 || !year) {
+            return res.status(400).json({ error: 'apartment_id, month, year required' });
+        }
+        const when = req.body?.paid_at ? new Date(req.body.paid_at) : new Date();
+        if (Number.isNaN(when.getTime())) {
+            return res.status(400).json({ error: 'Invalid paid_at' });
+        }
+        const { rows } = await db.query(
+            `UPDATE bills b
+             SET paid_at = $1, updated_at = NOW()
+             FROM rooms r
+             WHERE b.room_id = r.room_id
+               AND r.apartment_id = $2
+               AND b.month = $3 AND b.year = $4
+               AND b.paid_at IS NULL
+             RETURNING b.bill_id, b.room_id, r.room_number`,
+            [when.toISOString(), aptId, month, year]
+        );
+        return res.json({
+            data: { marked_count: rows.length, bills: rows, paid_at: when.toISOString() },
+        });
+    } catch (err) {
+        console.error('[bills/bulk-mark-paid]', err);
+        return res.status(500).json({ error: 'Failed to bulk mark paid' });
+    }
+});
 
 
 // ---------- Bulk PDF (single file, many bills) ----------

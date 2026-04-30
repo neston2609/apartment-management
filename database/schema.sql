@@ -85,6 +85,8 @@ CREATE TABLE expense_settings (
     electricity_max_units       INTEGER NOT NULL DEFAULT 9999,
     invoice_footer_text         TEXT DEFAULT '',
     contract_terms              TEXT DEFAULT '',
+    payment_due_day             INTEGER,
+    late_fee_per_day            DECIMAL(10,2) NOT NULL DEFAULT 0,
     created_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(apartment_id)
@@ -122,6 +124,7 @@ CREATE TABLE bills (
     rent_cost        DECIMAL(10,2) NOT NULL DEFAULT 0,
     other_cost       DECIMAL(10,2) NOT NULL DEFAULT 0,
     total_cost       DECIMAL(10,2) NOT NULL DEFAULT 0,
+    paid_at          TIMESTAMP WITH TIME ZONE,
     created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(room_id, month, year)
@@ -154,4 +157,5 @@ CREATE INDEX idx_meter_readings_room_id    ON meter_readings(room_id);
 CREATE INDEX idx_meter_readings_month_year ON meter_readings(month, year);
 CREATE INDEX idx_bills_room_id             ON bills(room_id);
 CREATE INDEX idx_bills_month_year          ON bills(month, year);
+CREATE INDEX idx_bills_paid_at             ON bills(paid_at);
 CREATE INDEX idx_expense_settings_apt      ON expense_settings(apartment_id);

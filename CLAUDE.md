@@ -239,6 +239,8 @@ CREATE TABLE expense_settings (
     electricity_max_units       INTEGER       NOT NULL DEFAULT 9999,
     invoice_footer_text         TEXT DEFAULT '',
     contract_terms              TEXT DEFAULT '', -- per-apartment override; one rule per line
+    payment_due_day             INTEGER,         -- day of month rent is due (1-31), nullable
+    late_fee_per_day            DECIMAL(10,2) NOT NULL DEFAULT 0, -- THB / day late
     created_at                  TIMESTAMPTZ DEFAULT NOW(),
     updated_at                  TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(apartment_id)
@@ -270,6 +272,7 @@ CREATE TABLE bills (
     rent_cost        DECIMAL(10,2) NOT NULL DEFAULT 0,
     other_cost       DECIMAL(10,2) NOT NULL DEFAULT 0,
     total_cost       DECIMAL(10,2) NOT NULL DEFAULT 0,
+    paid_at          TIMESTAMPTZ,                    -- when the bill was marked paid (NULL = unpaid)
     created_at       TIMESTAMPTZ DEFAULT NOW(),
     updated_at       TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(room_id, month, year)
@@ -319,6 +322,7 @@ CREATE INDEX idx_meter_readings_room_id    ON meter_readings(room_id);
 CREATE INDEX idx_meter_readings_month_year ON meter_readings(month, year);
 CREATE INDEX idx_bills_room_id             ON bills(room_id);
 CREATE INDEX idx_bills_month_year          ON bills(month, year);
+CREATE INDEX idx_bills_paid_at             ON bills(paid_at);
 CREATE INDEX idx_expense_settings_apt      ON expense_settings(apartment_id);
 CREATE INDEX idx_admin_users_role          ON admin_users(role);
 CREATE INDEX idx_prt_token                 ON password_reset_tokens(token);
@@ -364,11 +368,16 @@ signToken(payload)
 | Capability                                  | super_admin | admin | property_manager | tenant |
 |---------------------------------------------|:-----------:|:-----:|:----------------:|:------:|
 | Login                                        | ✅ | ✅ | ✅ | ✅ |
-| Dashboard, Apartments, Rooms, Tenants        | ✅ | ✅ | ❌ | ❌ |
+| Dashboard                                    | ✅ | ✅ | ❌ | ❌ |
+| Apartments — list page                       | ✅ | ✅ | ✅ (read-only; no add/edit/delete buttons) | ❌ |
+| Apartments — create / edit / delete         | ✅ | ✅ | ❌ | ❌ |
+| Rooms — view + edit single room (status / notes / price / number) | ✅ | ✅ | ✅ | ❌ |
+| Rooms — bulk floor-price update              | ✅ | ✅ | ❌ | ❌ |
+| Tenants — list page                          | ✅ | ✅ | ✅ | ❌ |
+| Tenants — edit existing tenant + download contract | ✅ | ✅ | ✅ | ❌ |
+| Tenants — create new / move-out              | ✅ | ✅ | ❌ | ❌ |
 | Billing list & form, edit/create bills       | ✅ | ✅ | ❌ | ❌ |
 | Print Invoice page (single + bulk PDF)       | ✅ | ✅ | ✅ | ❌ |
-| Apartment / Tenant create / move-out / delete | ✅ | ✅ | ❌ | ❌ |
-| Edit tenant (limited fields like phone/email) | ✅ | ✅ | ✅ | ❌ |
 | Settings (per-apartment expense + contract)  | ✅ | ✅ | ❌ | ❌ |
 | User Management (`/admin/users`)             | ✅ | ❌ | ❌ | ❌ |
 | System Settings — SMTP (`/admin/system-settings`) | ✅ | ❌ | ❌ | ❌ |
@@ -378,6 +387,22 @@ The Sidebar (`frontend/src/components/Sidebar.jsx`) is the source of truth for v
 - `tenant` → `/tenant/dashboard`
 - `admin_role === 'property_manager'` → `/admin/invoice`
 - otherwise → `/admin/dashboard`
+
+**Property manager sidebar links** (`PROPERTY_MANAGER_LINKS`):
+```
+/admin/apartments  อพาร์ทเมนต์         (read-only list — used as a gateway to /admin/rooms/:id)
+/admin/tenants     ผู้เช่า              (edit existing tenants, download contract)
+/admin/invoice     พิมพ์ใบแจ้งหนี้
+```
+
+**Frontend guards for property_manager** (driven by `useAuth().user.admin_role`):
+- `Apartments.jsx` — hide "เพิ่มอพาร์ทเมนต์" button + "แก้ไข" / "ลบ" actions per row. The "ห้องพัก / ตั้งราคา" link is always visible.
+- `Rooms.jsx` — hide "ปรับราคาทั้งชั้น" button. Single-room edit modal is fully usable (status, notes, price, room_number).
+- `Tenants.jsx` — hide "เพิ่มผู้เช่า" button + "ย้ายออก" action per row. "แก้ไข" + "สัญญา" stay visible.
+
+**Backend enforcement** (the source of truth):
+- `requireAdminRoles('super_admin', 'admin')` (alias `fullAdmin`) — guards apartment create/update/delete, room bulk floor-price, tenant create / move-out, bill create/update, settings PUT, billing import.
+- All other admin routes (any tenant edit, single-room edit, listing endpoints, contract PDF, invoice PDF) only require `adminOnly` — property_manager passes.
 
 ---
 
@@ -461,13 +486,19 @@ All responses use the envelope `{ data: ... }` for success and `{ error: 'messag
 | GET    | `/:id`                            | admin OR tenant if same room |
 | POST   | `/`                               | super_admin, admin |
 | PUT    | `/:id`                            | super_admin, admin |
+| POST   | `/:id/mark-paid`                  | super_admin, admin |
+| POST   | `/:id/mark-unpaid`                | super_admin, admin |
 | GET    | `/meter/:room_id?month=&year=`    | any admin |
 | GET    | `/tenant/me`                      | tenant — list own bills |
 | GET    | `/:id/pdf?size=A4|A5&lang=th|en`  | admin OR tenant if same room |
 | POST   | `/import`                         | super_admin, admin |
 | POST   | `/bulk-pdf`                       | any admin |
 
-`GET /` returns each bill enriched with `r.room_number, r.apartment_id, r.rental_price, r.status, t.full_name AS tenant_name`. The dashboard relies on `r.status` to filter by room status.
+`GET /` returns each bill enriched with `r.room_number, r.apartment_id, r.rental_price, r.status, t.full_name AS tenant_name, s.payment_due_day, s.late_fee_per_day`. The dashboard relies on `r.status` to filter by room status; the Billing page derives payment status from `b.paid_at` + `s.payment_due_day` + `s.late_fee_per_day`.
+
+`POST /:id/mark-paid` body (optional): `{ paid_at }` (ISO timestamp; defaults to NOW). Sets `bills.paid_at` to that value. `POST /:id/mark-unpaid` clears `bills.paid_at` back to NULL. Both preserve all cost columns and `total_cost`.
+
+The bill upsert paths (`POST /` and `PUT /:id`) **do not touch `paid_at`** — editing/recalculating a bill never changes its payment state.
 
 `POST /` and `PUT /:id` use the same `computeBill` helper in a single transaction:
 
@@ -504,7 +535,10 @@ Both the meter reading and the bill use `INSERT ... ON CONFLICT (room_id, month,
 
 `GET` returns the row, **falling back to default `contract_terms`** when the stored value is empty. This is so the Settings page never starts blank — admins always see editable defaults.
 
-`PUT` upserts: `water_price_per_unit, water_max_units, electricity_price_per_unit, electricity_max_units, invoice_footer_text, contract_terms`.
+`PUT` upserts: `water_price_per_unit, water_max_units, electricity_price_per_unit, electricity_max_units, invoice_footer_text, contract_terms, payment_due_day, late_fee_per_day`.
+
+- `payment_due_day` — integer 1-31 (or `null` to disable due-date tracking). Server clamps invalid values to `null`.
+- `late_fee_per_day` — DECIMAL(10,2) THB / day. Defaults to 0.
 
 ### 8.7 `/api/users` (super-admin)
 
@@ -598,6 +632,15 @@ nodemailer.createTransport({
 13. **Forgot-password response** never reveals whether an account exists (always `{sent:true}`). Token TTL = 1 hour, single-use (`used_at`).
 
 14. **Contract terms (`contract_terms`)** — stored as a single TEXT field; one rule per line. The PDF splits on `\r?\n`, trims, drops empty lines. If empty/null, fall back to `DEFAULT_CONTRACT_TERMS` (see §10).
+
+15. **Bill payment status** — derived client-side from `bills.paid_at` + `expense_settings.payment_due_day` + `expense_settings.late_fee_per_day`:
+    - `paid_at` set                                  → **"ชำระค่าเช่าแล้ว"** (green)
+    - unpaid AND `payment_due_day` is null/absent    → **"ออกบิลแล้ว"** (blue)
+    - unpaid AND today ≤ due date                    → **"รอชำระ"** (amber)
+    - unpaid AND today > due date                    → **"เกินกำหนด"** (red), with `late_fee = ceil((now - due) / 1day) * late_fee_per_day`
+
+    Due date is built as `Date(bill.year, bill.month - 1, min(payment_due_day, last_day_of_month), 23:59:59)`.
+    `late_fee` is shown inline next to both the status pill and the total on the Billing page; it is **not** persisted into `total_cost`.
 
 ---
 
@@ -822,7 +865,12 @@ Filter logic: `bills.filter(b => statuses.includes(b.status))` then sum `water_c
 
 Listing page:
 - Apartment + month + year selector.
-- Per-room row: room_number, tenant_name, status badge, total (฿ or "ยังไม่ได้สร้าง"), link "สร้าง" / "แก้ไข".
+- Per-room row: room_number, tenant_name, **payment status pill** (or room status badge if no bill yet), total, action column.
+   - When the bill is overdue, the status cell adds a small red sub-line: "เลย N วัน · ค่าปรับ ฿X.XX".
+   - When the bill is overdue, the total cell adds a small red sub-line: "+ ฿X.XX ค่าปรับ → ฿Y.YY" — `total_cost` is not modified, this is computed view-only.
+- Action column shows `สร้าง` / `แก้ไข` link, plus an inline button:
+   - Bill exists, unpaid → `✓ ทำเครื่องหมายชำระแล้ว` (green) → `POST /bills/:id/mark-paid`.
+   - Bill exists, paid → `ยกเลิกการชำระ` (slate) → `POST /bills/:id/mark-unpaid`.
 - "นำเข้าจาก Excel" button opens `BillingImport.jsx` modal.
 
 `BillingForm` (route `/admin/billing/:roomId/:month/:year`):
@@ -849,6 +897,9 @@ Listing page:
 ### 12.12 Settings (`pages/admin/Settings.jsx`)
 
 - Apartment dropdown, then a card with grid of 4 numeric fields (water/elec price + max units), then `invoice_footer_text` textarea, then `contract_terms` textarea (12 rows, monospace).
+- A separate "การชำระเงิน & ค่าปรับ" section under a divider with 2 fields:
+   - `payment_due_day` — number input min=1 max=31, optional (blank → "ออกบิลแล้ว" status only).
+   - `late_fee_per_day` — number input min=0 step=0.01, defaults to 0.
 - The contract terms field **pre-fills with the default 10 rules** if the API returned an empty value (server already handles this; the frontend mirrors the constant for safety).
 - A "คืนค่าเริ่มต้น" link near the textarea label resets the field to the defaults.
 - Save → `PUT /settings/:apartment_id` with the entire form object.
@@ -1101,6 +1152,7 @@ node database/migrate.js          # runs schema.sql (DROP + CREATE)
 psql ... -f database/migrate-001-add-role.sql
 psql ... -f database/migrate-002-rooms-and-system.sql
 psql ... -f database/migrations/001_add_contract_terms.sql
+psql ... -f database/migrations/002_add_payment_status.sql
 
 # 4. Seed sample data + admin account
 node database/seed.js
@@ -1205,13 +1257,21 @@ Before considering an implementation complete, verify:
 □ PDFs use Sarabun fonts (or Helvetica fallback).
 □ Bill invoice supports A4 + A5, Thai + English, single + bulk.
 □ Contract PDF uses expense_settings.contract_terms when present, else DEFAULT_CONTRACT_TERMS.
+□ Bill payment status displays correctly on the Billing page:
+     paid → "ชำระค่าเช่าแล้ว"; unpaid + no due_day → "ออกบิลแล้ว";
+     unpaid + before due → "รอชำระ"; unpaid + after due → "เกินกำหนด" with late fee.
+□ POST /bills/:id/mark-paid and /mark-unpaid update bills.paid_at without
+  touching cost columns or total_cost.
+□ Settings page exposes payment_due_day (1-31, optional) and late_fee_per_day.
 □ Settings page pre-fills contract_terms textarea with defaults when empty; "คืนค่าเริ่มต้น"
   resets it.
 □ Dashboard revenue card has 5 status checkboxes (default = occupied + caretaker) and
   re-aggregates breakdown live; "รายได้รวม (ตามสถานะห้องที่เลือก)".
 □ Login tab switcher highlights the selected tab in dark brand color.
 □ Three admin roles function correctly:
-     property_manager only sees Print Invoice page;
+     property_manager sees Apartments (read-only), Tenants (edit existing only),
+       and Print Invoice — but no Dashboard/Billing/Settings, no add/delete actions,
+       no bulk floor-price, no move-out;
      admin sees everything except Users + System Settings;
      super_admin sees everything.
 □ Forgot-password emails a single-use 1-hour token; reset-password updates the right user.

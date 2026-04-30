@@ -4,8 +4,12 @@ import toast from 'react-hot-toast';
 import api, { unwrap, fmtThaiDate } from '../../utils/api';
 import Table from '../../components/common/Table';
 import Spinner from '../../components/common/Spinner';
+import { useAuth } from '../../context/AuthContext';
 
 export default function Tenants() {
+    const { user: me } = useAuth();
+    const isPropertyManager = me?.admin_role === 'property_manager';
+
     const [apts, setApts] = useState([]);
     const [filter, setFilter] = useState('');
     const [tenants, setTenants] = useState([]);
@@ -62,7 +66,9 @@ export default function Tenants() {
                 <div className="flex gap-2 text-xs">
                     <Link to={`/admin/tenants/${r.tenant_id}/edit`} className="text-brand-600 hover:underline">แก้ไข</Link>
                     <button onClick={() => downloadContract(r)} className="text-slate-600 hover:underline">สัญญา</button>
-                    <button onClick={() => handleMoveOut(r)} className="text-red-600 hover:underline">ย้ายออก</button>
+                    {!isPropertyManager && (
+                        <button onClick={() => handleMoveOut(r)} className="text-red-600 hover:underline">ย้ายออก</button>
+                    )}
                 </div>
             ),
         },
@@ -72,10 +78,12 @@ export default function Tenants() {
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-slate-800">ผู้เช่า</h1>
-                <Link to="/admin/tenants/new"
-                      className="bg-brand-600 hover:bg-brand-700 text-white text-sm px-3 py-2 rounded-md">
-                    เพิ่มผู้เช่า
-                </Link>
+                {!isPropertyManager && (
+                    <Link to="/admin/tenants/new"
+                          className="bg-brand-600 hover:bg-brand-700 text-white text-sm px-3 py-2 rounded-md">
+                        เพิ่มผู้เช่า
+                    </Link>
+                )}
             </div>
 
             <div className="bg-white border border-slate-200 rounded-lg p-3">

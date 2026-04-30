@@ -5,6 +5,7 @@ import api, { unwrap, fmtMoney } from '../../utils/api';
 import Modal from '../../components/common/Modal';
 import Spinner from '../../components/common/Spinner';
 import Badge from '../../components/common/Badge';
+import { useAuth } from '../../context/AuthContext';
 
 const STATUS_OPTIONS = [
     { value: 'occupied',    label: 'มีผู้เช่า' },
@@ -24,6 +25,8 @@ const STATUS_COLORS = {
 
 export default function Rooms() {
     const { apartmentId } = useParams();
+    const { user: me } = useAuth();
+    const isPropertyManager = me?.admin_role === 'property_manager';
     const [rooms, setRooms] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(null);
@@ -102,10 +105,12 @@ export default function Rooms() {
                         คลิกที่ห้องเพื่อ <strong>กำหนดราคา/แก้ไขเลขห้อง/หมายเหตุ</strong> หรือใช้ปุ่ม "ปรับราคาทั้งชั้น"
                     </p>
                 </div>
-                <button onClick={() => setBulkOpen(true)}
-                        className="bg-slate-700 hover:bg-slate-800 text-white text-sm px-3 py-2 rounded-md">
-                    ปรับราคาทั้งชั้น
-                </button>
+                {!isPropertyManager && (
+                    <button onClick={() => setBulkOpen(true)}
+                            className="bg-slate-700 hover:bg-slate-800 text-white text-sm px-3 py-2 rounded-md">
+                        ปรับราคาทั้งชั้น
+                    </button>
+                )}
             </div>
 
             {byFloor.map(([floor, list]) => (

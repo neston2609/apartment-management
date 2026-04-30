@@ -6,16 +6,54 @@ import Spinner from '../../components/common/Spinner';
 import Badge from '../../components/common/Badge';
 import BillingImport from './BillingImport';
 
-const now = new Date();
+const today = new Date();
+
+/**
+ * Derive a bill's payment status.
+ *   no bill                         -> null (let the row show the room status instead)
+ *   paid_at set                     -> 'paid'    "ชำระค่าเช่าแล้ว"
+ *   no payment_due_day configured   -> 'issued'  "ออกบิลแล้ว"
+ *   today <= due date               -> 'pending' "รอชำระ"
+ *   today >  due date               -> 'overdue' "เกินกำหนด" (with late fee)
+ */
+function paymentStatus(bill, now = new Date()) {
+    if (!bill) return null;
+    if (bill.paid_at) {
+        return { kind: 'paid', label: 'ชำระค่าเช่าแล้ว',
+                 cls: 'bg-green-100 text-green-800' };
+    }
+    const dueDayRaw = bill.payment_due_day;
+    if (dueDayRaw == null || dueDayRaw === '') {
+        return { kind: 'issued', label: 'ออกบิลแล้ว',
+                 cls: 'bg-blue-100 text-blue-800' };
+    }
+    // Clamp due day to last day of that month
+    const lastDay = new Date(bill.year, bill.month, 0).getDate();
+    const day = Math.min(parseInt(dueDayRaw, 10), lastDay);
+    const dueDate = new Date(bill.year, bill.month , day, 23, 59, 59);
+
+    if (now.getTime() <= dueDate.getTime()) {
+        return { kind: 'pending', label: 'รอชำระ',
+                 cls: 'bg-amber-100 text-amber-800' };
+    }
+    const days = Math.ceil((now.getTime() - dueDate.getTime()) / (24 * 60 * 60 * 1000));
+    const lateFee = +(Number(bill.late_fee_per_day || 0) * days).toFixed(2);
+    return {
+        kind: 'overdue', label: 'เกินกำหนด',
+        cls: 'bg-red-100 text-red-800',
+        days_overdue: days, late_fee: lateFee,
+    };
+}
 
 export default function Billing() {
     const [apts, setApts]     = useState([]);
     const [aptId, setAptId]   = useState('');
-    const [month, setMonth]   = useState(now.getMonth() + 1);
-    const [year, setYear]     = useState(now.getFullYear());
+    const [month, setMonth]   = useState(today.getMonth() + 1);
+    const [year, setYear]     = useState(today.getFullYear());
     const [rooms, setRooms]   = useState([]);
     const [bills, setBills]   = useState([]);
     const [loading, setLoading] = useState(false);
+    const [busyId, setBusyId]   = useState(null);
     const [importOpen, setImportOpen] = useState(false);
 
     const reload = () => {
@@ -25,6 +63,7 @@ export default function Billing() {
             unwrap(api.get(`/apartments/${aptId}/rooms`)),
             unwrap(api.get('/bills', { params: { apartment_id: aptId, month, year } })),
         ]).then(([r, b]) => { setRooms(r || []); setBills(b || []); })
+          .catch(() => toast.error('โหลดข้อมูลล้มเหลว'))
           .finally(() => setLoading(false));
     };
 
@@ -35,20 +74,27 @@ export default function Billing() {
         });
     }, []);
 
-    useEffect(() => {
-        if (!aptId) return;
-        setLoading(true);
-        Promise.all([
-            unwrap(api.get(`/apartments/${aptId}/rooms`)),
-            unwrap(api.get('/bills', { params: { apartment_id: aptId, month, year } })),
-        ]).then(([r, b]) => {
-            setRooms(r || []);
-            setBills(b || []);
-        }).catch(() => toast.error('โหลดข้อมูลล้มเหลว'))
-          .finally(() => setLoading(false));
-    }, [aptId, month, year]);
+    useEffect(() => { reload(); /* eslint-disable-next-line */ }, [aptId, month, year]);
 
     const billByRoom = bills.reduce((m, b) => { m[b.room_id] = b; return m; }, {});
+    const now = new Date();
+
+    const togglePaid = async (bill) => {
+        if (!bill) return;
+        setBusyId(bill.bill_id);
+        try {
+            if (bill.paid_at) {
+                await api.post(`/bills/${bill.bill_id}/mark-unpaid`);
+                toast.success('ยกเลิกการชำระแล้ว');
+            } else {
+                await api.post(`/bills/${bill.bill_id}/mark-paid`);
+                toast.success('บันทึกการชำระแล้ว');
+            }
+            await reload();
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'อัปเดตสถานะล้มเหลว');
+        } finally { setBusyId(null); }
+    };
 
     return (
         <div className="space-y-4">
@@ -91,19 +137,63 @@ export default function Billing() {
                             <tbody>
                                 {rooms.map((r) => {
                                     const b = billByRoom[r.room_id];
+                                    const ps = paymentStatus(b, now);
+                                    const hasBill = !!b;
+                                    const total = hasBill ? Number(b.total_cost) : 0;
+                                    const lateFee = ps?.kind === 'overdue' ? ps.late_fee : 0;
+                                    const grand = total + lateFee;
                                     return (
                                         <tr key={r.room_id} className="border-t border-slate-100 hover:bg-slate-50">
                                             <td className="px-4 py-2 font-medium">{r.room_number}</td>
                                             <td className="px-4 py-2">{r.tenant_name || '-'}</td>
-                                            <td className="px-4 py-2"><Badge status={r.status} /></td>
-                                            <td className="px-4 py-2 text-right">
-                                                {b ? `฿ ${fmtMoney(b.total_cost)}` : <span className="text-slate-400">-</span>}
+                                            <td className="px-4 py-2">
+                                                {ps ? (
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className={`inline-flex w-fit items-center px-2 py-0.5 rounded text-xs font-medium ${ps.cls}`}>
+                                                            {ps.label}
+                                                        </span>
+                                                        {ps.kind === 'overdue' && (
+                                                            <span className="text-[11px] text-red-700">
+                                                                เลย {ps.days_overdue} วัน · ค่าปรับ ฿ {fmtMoney(ps.late_fee)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <Badge status={r.status} />
+                                                )}
                                             </td>
                                             <td className="px-4 py-2 text-right">
-                                                <Link to={`/admin/billing/${r.room_id}/${month}/${year}`}
-                                                      className="text-brand-600 hover:underline text-xs">
-                                                    {b ? 'แก้ไข' : 'สร้าง'}
-                                                </Link>
+                                                {hasBill ? (
+                                                    <div className="flex flex-col items-end gap-0.5">
+                                                        <span>฿ {fmtMoney(total)}</span>
+                                                        {lateFee > 0 && (
+                                                            <span className="text-[11px] text-red-700">
+                                                                + ฿ {fmtMoney(lateFee)} ค่าปรับ → ฿ {fmtMoney(grand)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-slate-400">-</span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-2 text-right">
+                                                <div className="flex flex-col items-end gap-0.5 text-xs">
+                                                    <Link to={`/admin/billing/${r.room_id}/${month}/${year}`}
+                                                          className="text-brand-600 hover:underline">
+                                                        {hasBill ? 'แก้ไข' : 'สร้าง'}
+                                                    </Link>
+                                                    {hasBill && (
+                                                        <button onClick={() => togglePaid(b)}
+                                                                disabled={busyId === b.bill_id}
+                                                                className={`hover:underline disabled:opacity-50 ${
+                                                                    b.paid_at ? 'text-slate-500' : 'text-green-700'
+                                                                }`}>
+                                                            {busyId === b.bill_id
+                                                                ? 'กำลังบันทึก...'
+                                                                : b.paid_at ? 'ยกเลิกการชำระ' : '✓ ทำเครื่องหมายชำระแล้ว'}
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     );

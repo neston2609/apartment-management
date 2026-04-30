@@ -89,6 +89,29 @@ export default function Settings() {
                            value={form.electricity_max_units}
                            onChange={(v) => setForm({ ...form, electricity_max_units: parseInt(v, 10) || 0 })} />
                 </div>
+
+                <div className="border-t border-slate-200 pt-3 mt-2">
+                    <h3 className="text-sm font-semibold text-slate-700 mb-2">การชำระเงิน &amp; ค่าปรับ</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                        <label className="block">
+                            <span className="text-slate-600">วันครบกำหนดชำระ (ของทุกเดือน)</span>
+                            <input type="number" min={1} max={31}
+                                   placeholder="เช่น 5"
+                                   className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                                   value={form.payment_due_day ?? ''}
+                                   onChange={(e) => {
+                                       const v = e.target.value;
+                                       setForm({ ...form, payment_due_day: v === '' ? null : parseInt(v, 10) });
+                                   }} />
+                            <span className="text-xs text-slate-500 mt-0.5 block">
+                                เว้นว่างถ้ายังไม่กำหนด — สถานะจะแสดงเป็น "ออกบิลแล้ว" แทน
+                            </span>
+                        </label>
+                        <Field label="ค่าปรับต่อวัน (บาท)" type="number" step="0.01" min={0}
+                               value={form.late_fee_per_day ?? 0}
+                               onChange={(v) => setForm({ ...form, late_fee_per_day: parseFloat(v) || 0 })} />
+                    </div>
+                </div>
                 <label className="block">
                     <span className="text-slate-600">ข้อความท้ายใบแจ้งหนี้</span>
                     <textarea rows={3} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"

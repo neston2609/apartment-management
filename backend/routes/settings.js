@@ -28,6 +28,8 @@ router.get('/:apartment_id', async (req, res) => {
                     electricity_max_units: 9999,
                     invoice_footer_text: '',
                     contract_terms: DEFAULT_CONTRACT_TERMS_TEXT,
+                    payment_due_day: null,
+                    late_fee_per_day: 0,
                 },
             });
         }
@@ -51,14 +53,24 @@ router.put('/:apartment_id', fullAdmin, async (req, res) => {
             water_price_per_unit, water_max_units,
             electricity_price_per_unit, electricity_max_units,
             invoice_footer_text, contract_terms,
+            payment_due_day, late_fee_per_day,
         } = req.body;
+
+        // Sanitize payment_due_day: must be int 1-31 or null
+        let dueDay = null;
+        if (payment_due_day != null && payment_due_day !== '') {
+            const d = parseInt(payment_due_day, 10);
+            if (Number.isFinite(d) && d >= 1 && d <= 31) dueDay = d;
+        }
+        const lateFee = Number(late_fee_per_day) || 0;
 
         const { rows } = await db.query(
             `INSERT INTO expense_settings
              (apartment_id, water_price_per_unit, water_max_units,
               electricity_price_per_unit, electricity_max_units,
-              invoice_footer_text, contract_terms)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)
+              invoice_footer_text, contract_terms,
+              payment_due_day, late_fee_per_day)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
              ON CONFLICT (apartment_id) DO UPDATE SET
                  water_price_per_unit       = EXCLUDED.water_price_per_unit,
                  water_max_units            = EXCLUDED.water_max_units,
@@ -66,12 +78,15 @@ router.put('/:apartment_id', fullAdmin, async (req, res) => {
                  electricity_max_units      = EXCLUDED.electricity_max_units,
                  invoice_footer_text        = EXCLUDED.invoice_footer_text,
                  contract_terms             = EXCLUDED.contract_terms,
+                 payment_due_day            = EXCLUDED.payment_due_day,
+                 late_fee_per_day           = EXCLUDED.late_fee_per_day,
                  updated_at = NOW()
              RETURNING *`,
             [id,
              water_price_per_unit ?? 0, water_max_units ?? 9999,
              electricity_price_per_unit ?? 0, electricity_max_units ?? 9999,
-             invoice_footer_text ?? '', contract_terms ?? '']
+             invoice_footer_text ?? '', contract_terms ?? '',
+             dueDay, lateFee]
         );
         return res.json({ data: rows[0] });
     } catch (err) {
