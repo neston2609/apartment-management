@@ -368,7 +368,7 @@ signToken(payload)
 | Capability                                  | super_admin | admin | property_manager | tenant |
 |---------------------------------------------|:-----------:|:-----:|:----------------:|:------:|
 | Login                                        | ✅ | ✅ | ✅ | ✅ |
-| Dashboard                                    | ✅ | ✅ | ❌ | ❌ |
+| Dashboard                                    | ✅ | ✅ | ✅ | ❌ |
 | Apartments — list page                       | ✅ | ✅ | ✅ (read-only; no add/edit/delete buttons) | ❌ |
 | Apartments — create / edit / delete         | ✅ | ✅ | ❌ | ❌ |
 | Rooms — view + edit single room (status / notes / price / number) | ✅ | ✅ | ✅ | ❌ |
@@ -376,22 +376,23 @@ signToken(payload)
 | Tenants — list page                          | ✅ | ✅ | ✅ | ❌ |
 | Tenants — edit existing tenant + download contract | ✅ | ✅ | ✅ | ❌ |
 | Tenants — create new / move-out              | ✅ | ✅ | ❌ | ❌ |
-| Billing list & form, edit/create bills       | ✅ | ✅ | ❌ | ❌ |
+| Billing — list page                          | ✅ | ✅ | ✅ | ❌ |
+| Billing — create / edit individual bills (BillingForm) | ✅ | ✅ | ✅ | ❌ |
+| Billing — Excel import / mark-paid / mark-unpaid / bulk-mark-paid | ✅ | ✅ | ❌ | ❌ |
 | Print Invoice page (single + bulk PDF)       | ✅ | ✅ | ✅ | ❌ |
 | Settings (per-apartment expense + contract)  | ✅ | ✅ | ❌ | ❌ |
 | User Management (`/admin/users`)             | ✅ | ❌ | ❌ | ❌ |
 | System Settings — SMTP (`/admin/system-settings`) | ✅ | ❌ | ❌ | ❌ |
 | Tenant own dashboard / bills / contract / profile | ❌ | ❌ | ❌ | ✅ |
 
-The Sidebar (`frontend/src/components/Sidebar.jsx`) is the source of truth for visibility. After login, redirect by role:
-- `tenant` → `/tenant/dashboard`
-- `admin_role === 'property_manager'` → `/admin/invoice`
-- otherwise → `/admin/dashboard`
+The Sidebar (`frontend/src/components/Sidebar.jsx`) is the source of truth for visibility. After login, all admin sub-roles redirect to `/admin/dashboard`; tenants redirect to `/tenant/dashboard`.
 
 **Property manager sidebar links** (`PROPERTY_MANAGER_LINKS`):
 ```
+/admin/dashboard   แดชบอร์ด
 /admin/apartments  อพาร์ทเมนต์         (read-only list — used as a gateway to /admin/rooms/:id)
 /admin/tenants     ผู้เช่า              (edit existing tenants, download contract)
+/admin/billing     ใบแจ้งค่าเช่า        (create/edit bills only — no import / payment toggle)
 /admin/invoice     พิมพ์ใบแจ้งหนี้
 ```
 
@@ -399,9 +400,11 @@ The Sidebar (`frontend/src/components/Sidebar.jsx`) is the source of truth for v
 - `Apartments.jsx` — hide "เพิ่มอพาร์ทเมนต์" button + "แก้ไข" / "ลบ" actions per row. The "ห้องพัก / ตั้งราคา" link is always visible.
 - `Rooms.jsx` — hide "ปรับราคาทั้งชั้น" button. Single-room edit modal is fully usable (status, notes, price, room_number).
 - `Tenants.jsx` — hide "เพิ่มผู้เช่า" button + "ย้ายออก" action per row. "แก้ไข" + "สัญญา" stay visible.
+- `Billing.jsx` — hide header buttons "✓ ชำระแล้วทุกห้อง" + "นำเข้าจาก Excel", and the per-row mark-paid / mark-unpaid action. "สร้าง" / "แก้ไข" links stay visible.
 
 **Backend enforcement** (the source of truth):
-- `requireAdminRoles('super_admin', 'admin')` (alias `fullAdmin`) — guards apartment create/update/delete, room bulk floor-price, tenant create / move-out, bill create/update, settings PUT, billing import.
+- `requireAdminRoles('super_admin', 'admin')` (alias `fullAdmin`) — guards apartment create/update/delete, room bulk floor-price, tenant create / move-out, settings PUT, billing import, mark-paid / mark-unpaid / bulk-mark-paid.
+- Bill create/update (`POST /api/bills`, `PUT /api/bills/:id`) only requires `adminOnly` — property_manager passes.
 - All other admin routes (any tenant edit, single-room edit, listing endpoints, contract PDF, invoice PDF) only require `adminOnly` — property_manager passes.
 
 ---
@@ -484,8 +487,8 @@ All responses use the envelope `{ data: ... }` for success and `{ error: 'messag
 |--------|-----------------------------------|------|
 | GET    | `/?month=&year=&apartment_id=`    | any admin |
 | GET    | `/:id`                            | admin OR tenant if same room |
-| POST   | `/`                               | super_admin, admin |
-| PUT    | `/:id`                            | super_admin, admin |
+| POST   | `/`                               | any admin (incl. property_manager) |
+| PUT    | `/:id`                            | any admin (incl. property_manager) |
 | POST   | `/:id/mark-paid`                  | super_admin, admin |
 | POST   | `/:id/mark-unpaid`                | super_admin, admin |
 | POST   | `/bulk-mark-paid`                 | super_admin, admin |
@@ -874,9 +877,11 @@ Filter logic: `bills.filter(b => statuses.includes(b.status))` then sum `water_c
 
 Listing page:
 - Apartment + month + year selector.
-- Per-room row: room_number, tenant_name, **payment status pill** (or room status badge if no bill yet), total, action column.
-   - When the bill is overdue, the status cell adds a small red sub-line: "เลย N วัน · ค่าปรับ ฿X.XX".
-   - When the bill is overdue, the total cell adds a small red sub-line: "+ ฿X.XX ค่าปรับ → ฿Y.YY" — `total_cost` is not modified, this is computed view-only.
+- Per-room row: room_number, tenant_name, **status cell**, total, action column.
+- **Status cell rule:**
+   - **Only rooms with `status === 'occupied'`** show the payment-status pill (ออกบิลแล้ว / รอชำระ / ชำระค่าเช่าแล้ว / เกินกำหนด — see §16).
+   - All other room statuses (`vacant`, `maintenance`, `common`, `caretaker`) always show the room-type badge instead, regardless of whether a bill exists. Late-fee inline text (เลย N วัน · ค่าปรับ ฿X.XX) is only rendered when the room is occupied AND overdue.
+- When the bill is overdue, the total cell adds a small red sub-line: "+ ฿X.XX ค่าปรับ → ฿Y.YY" — `total_cost` is not modified, this is computed view-only.
 - Action column shows `สร้าง` / `แก้ไข` link, plus an inline button:
    - Bill exists, unpaid → `✓ ทำเครื่องหมายชำระแล้ว` (green) → `POST /bills/:id/mark-paid`.
    - Bill exists, paid → `ยกเลิกการชำระ` (slate) → `POST /bills/:id/mark-unpaid`.
@@ -1271,6 +1276,8 @@ Before considering an implementation complete, verify:
 □ Bill payment status displays correctly on the Billing page:
      paid → "ชำระค่าเช่าแล้ว"; unpaid + no due_day → "ออกบิลแล้ว";
      unpaid + before due → "รอชำระ"; unpaid + after due → "เกินกำหนด" with late fee.
+□ Payment-status pill only renders for occupied rooms; vacant / maintenance /
+  common / caretaker rooms show their room-type Badge in the Status column instead.
 □ POST /bills/:id/mark-paid and /mark-unpaid update bills.paid_at without
   touching cost columns or total_cost.
 □ POST /bills/bulk-mark-paid is idempotent: marks all WHERE paid_at IS NULL
@@ -1286,8 +1293,9 @@ Before considering an implementation complete, verify:
   re-aggregates breakdown live; "รายได้รวม (ตามสถานะห้องที่เลือก)".
 □ Login tab switcher highlights the selected tab in dark brand color.
 □ Three admin roles function correctly:
-     property_manager sees Apartments (read-only), Tenants (edit existing only),
-       and Print Invoice — but no Dashboard/Billing/Settings, no add/delete actions,
+     property_manager sees Dashboard, Apartments (read-only), Tenants (edit existing only),
+       Billing (create/edit individual bills only — no import / mark-paid / bulk-mark-paid),
+       and Print Invoice — but no Settings/Users/System Settings, no add/delete actions,
        no bulk floor-price, no move-out;
      admin sees everything except Users + System Settings;
      super_admin sees everything.

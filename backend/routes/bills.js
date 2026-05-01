@@ -97,7 +97,8 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 // ---------- Create or upsert bill + meter reading ----------
-router.post('/', authenticate, adminOnly, fullAdmin, async (req, res) => {
+// Any admin role (incl. property_manager) may create/edit individual bills.
+router.post('/', authenticate, adminOnly, async (req, res) => {
     const client = await db.getClient();
     try {
         await client.query('BEGIN');
@@ -188,7 +189,7 @@ router.post('/', authenticate, adminOnly, fullAdmin, async (req, res) => {
 });
 
 // ---------- Update bill (same upsert path) ----------
-router.put('/:id', authenticate, adminOnly, fullAdmin, async (req, res) => {
+router.put('/:id', authenticate, adminOnly, async (req, res) => {
     const client = await db.getClient();
     try {
         await client.query('BEGIN');

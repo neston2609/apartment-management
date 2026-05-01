@@ -5,6 +5,7 @@ import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear, defaultReportingMonth } f
 import Spinner from '../../components/common/Spinner';
 import Badge from '../../components/common/Badge';
 import BillingImport from './BillingImport';
+import { useAuth } from '../../context/AuthContext';
 
 const DEFAULT_PERIOD = defaultReportingMonth();
 
@@ -46,6 +47,9 @@ function paymentStatus(bill, now = new Date()) {
 }
 
 export default function Billing() {
+    const { user: me } = useAuth();
+    const isPropertyManager = me?.admin_role === 'property_manager';
+
     const [apts, setApts]     = useState([]);
     const [aptId, setAptId]   = useState('');
     const [month, setMonth]   = useState(DEFAULT_PERIOD.month);
@@ -129,19 +133,21 @@ export default function Billing() {
         <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <h1 className="text-2xl font-bold text-slate-800">ใบแจ้งค่าเช่า</h1>
-                <div className="flex flex-wrap gap-2">
-                    <button onClick={bulkMarkPaid}
-                            disabled={bulkBusy || unpaidCount === 0}
-                            className="bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-2 rounded-md disabled:opacity-50">
-                        {bulkBusy
-                            ? 'กำลังบันทึก...'
-                            : `✓ ชำระแล้วทุกห้อง${unpaidCount > 0 ? ` (${unpaidCount})` : ''}`}
-                    </button>
-                    <button onClick={() => setImportOpen(true)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 py-2 rounded-md">
-                        นำเข้าจาก Excel
-                    </button>
-                </div>
+                {!isPropertyManager && (
+                    <div className="flex flex-wrap gap-2">
+                        <button onClick={bulkMarkPaid}
+                                disabled={bulkBusy || unpaidCount === 0}
+                                className="bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-2 rounded-md disabled:opacity-50">
+                            {bulkBusy
+                                ? 'กำลังบันทึก...'
+                                : `✓ ชำระแล้วทุกห้อง${unpaidCount > 0 ? ` (${unpaidCount})` : ''}`}
+                        </button>
+                        <button onClick={() => setImportOpen(true)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 py-2 rounded-md">
+                            นำเข้าจาก Excel
+                        </button>
+                    </div>
+                )}
             </div>
 
             <div className="bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap gap-3 items-center text-sm">
@@ -175,7 +181,11 @@ export default function Billing() {
                             <tbody>
                                 {rooms.map((r) => {
                                     const b = billByRoom[r.room_id];
-                                    const ps = paymentStatus(b, now);
+                                    // Payment status only applies to rooms with an active tenant.
+                                    // Non-occupied rooms (vacant / maintenance / common / caretaker)
+                                    // always show their room-type badge regardless of bill state.
+                                    const isOccupied = r.status === 'occupied';
+                                    const ps = isOccupied ? paymentStatus(b, now) : null;
                                     const hasBill = !!b;
                                     const total = hasBill ? Number(b.total_cost) : 0;
                                     const lateFee = ps?.kind === 'overdue' ? ps.late_fee : 0;
@@ -220,7 +230,7 @@ export default function Billing() {
                                                           className="text-brand-600 hover:underline">
                                                         {hasBill ? 'แก้ไข' : 'สร้าง'}
                                                     </Link>
-                                                    {hasBill && (
+                                                    {hasBill && !isPropertyManager && (
                                                         <button onClick={() => togglePaid(b)}
                                                                 disabled={busyId === b.bill_id}
                                                                 className={`hover:underline disabled:opacity-50 ${

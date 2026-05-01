@@ -23,10 +23,7 @@ export default function Login() {
             login(data.token, data.user);
             toast.success('เข้าสู่ระบบสำเร็จ');
             const u = data.user;
-            const dest =
-                u.role === 'tenant'                              ? '/tenant/dashboard'
-              : u.admin_role === 'property_manager'             ? '/admin/invoice'
-              :                                                    '/admin/dashboard';
+            const dest = u.role === 'tenant' ? '/tenant/dashboard' : '/admin/dashboard';
             navigate(dest, { replace: true });
         } catch (err) {
             toast.error(err.response?.data?.error || 'เข้าสู่ระบบไม่สำเร็จ');
