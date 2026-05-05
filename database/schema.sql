@@ -146,6 +146,21 @@ CREATE TABLE admin_users (
 );
 
 -- =====================================================
+-- Table: login_logs
+-- =====================================================
+CREATE TABLE IF NOT EXISTS login_logs (
+    log_id        SERIAL PRIMARY KEY,
+    user_kind     VARCHAR(20),
+    user_id       INTEGER,
+    identifier    TEXT,
+    success       BOOLEAN NOT NULL,
+    error_reason  TEXT,
+    ip            TEXT,
+    user_agent    TEXT,
+    created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- =====================================================
 -- Indexes
 -- =====================================================
 CREATE INDEX idx_rooms_apartment_id        ON rooms(apartment_id);
@@ -159,3 +174,6 @@ CREATE INDEX idx_bills_room_id             ON bills(room_id);
 CREATE INDEX idx_bills_month_year          ON bills(month, year);
 CREATE INDEX idx_bills_paid_at             ON bills(paid_at);
 CREATE INDEX idx_expense_settings_apt      ON expense_settings(apartment_id);
+CREATE INDEX idx_login_logs_created_at     ON login_logs(created_at DESC);
+CREATE INDEX idx_login_logs_user           ON login_logs(user_kind, user_id);
+CREATE INDEX idx_login_logs_success        ON login_logs(success);

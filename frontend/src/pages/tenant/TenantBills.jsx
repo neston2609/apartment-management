@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear, defaultReportingMonth } from '../../utils/api';
 import Spinner from '../../components/common/Spinner';
+import { paymentStatus } from '../../utils/billStatus';
 
 export default function TenantBills() {
     const period = defaultReportingMonth();
@@ -69,6 +70,7 @@ export default function TenantBills() {
                     <thead className="bg-slate-50 text-slate-600">
                         <tr>
                             <th className="text-left px-4 py-2">เดือน</th>
+                            <th className="text-left px-4 py-2">สถานะ</th>
                             <th className="text-right px-4 py-2">ค่าน้ำ</th>
                             <th className="text-right px-4 py-2">ค่าไฟ</th>
                             <th className="text-right px-4 py-2">ค่าเช่า</th>
@@ -80,6 +82,9 @@ export default function TenantBills() {
                     <tbody>
                         {visible.map((b) => {
                             const isCurrent = b.month === period.month && Number(b.year) === period.year;
+                            const ps = paymentStatus(b);
+                            const lateFee = ps?.kind === 'overdue' ? ps.late_fee : 0;
+                            const grand = Number(b.total_cost) + lateFee;
                             return (
                                 <tr key={b.bill_id}
                                     className={`border-t border-slate-100 ${isCurrent ? 'bg-blue-50/40' : ''}`}>
@@ -87,11 +92,34 @@ export default function TenantBills() {
                                         {THAI_MONTHS[b.month - 1]} {thaiYear(b.year)}
                                         {isCurrent && <span className="ml-2 text-xs text-brand-700">(ปัจจุบัน)</span>}
                                     </td>
+                                    <td className="px-4 py-2">
+                                        {ps && (
+                                            <div className="flex flex-col gap-0.5">
+                                                <span className={`inline-flex w-fit items-center px-2 py-0.5 rounded text-xs font-medium ${ps.cls}`}>
+                                                    {ps.label}
+                                                </span>
+                                                {ps.kind === 'overdue' && (
+                                                    <span className="text-[11px] text-red-700">
+                                                        เลย {ps.days_overdue} วัน · ค่าปรับ ฿ {fmtMoney(ps.late_fee)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </td>
                                     <td className="px-4 py-2 text-right">{fmtMoney(b.water_cost)}</td>
                                     <td className="px-4 py-2 text-right">{fmtMoney(b.electricity_cost)}</td>
                                     <td className="px-4 py-2 text-right">{fmtMoney(b.rent_cost)}</td>
                                     <td className="px-4 py-2 text-right">{fmtMoney(b.other_cost)}</td>
-                                    <td className="px-4 py-2 text-right font-semibold">฿ {fmtMoney(b.total_cost)}</td>
+                                    <td className="px-4 py-2 text-right font-semibold">
+                                        <div className="flex flex-col items-end gap-0.5">
+                                            <span>฿ {fmtMoney(b.total_cost)}</span>
+                                            {lateFee > 0 && (
+                                                <span className="text-[11px] text-red-700 font-normal">
+                                                    + ฿ {fmtMoney(lateFee)} ค่าปรับ → ฿ {fmtMoney(grand)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
                                     <td className="px-4 py-2 text-right">
                                         <button onClick={() => downloadPdf(b.bill_id, 'A5', 'th')}
                                                 className="bg-brand-600 hover:bg-brand-700 text-white text-xs px-3 py-1 rounded-md">
@@ -102,7 +130,7 @@ export default function TenantBills() {
                             );
                         })}
                         {visible.length === 0 && (
-                            <tr><td colSpan={7} className="px-4 py-6 text-center text-slate-400">
+                            <tr><td colSpan={8} className="px-4 py-6 text-center text-slate-400">
                                 ไม่มีใบแจ้งหนี้สำหรับปีนี้
                             </td></tr>
                         )}

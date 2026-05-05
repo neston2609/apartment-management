@@ -3,6 +3,7 @@ import {
     HomeIcon, BuildingOffice2Icon, RectangleStackIcon,
     UsersIcon, DocumentTextIcon, PrinterIcon, Cog6ToothIcon,
     UserGroupIcon, ServerIcon, IdentificationIcon,
+    ShieldCheckIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 
@@ -16,8 +17,9 @@ const ALL_ADMIN_LINKS = [
 ];
 
 const SUPER_ONLY_LINKS = [
-    { to: '/admin/users',           label: 'จัดการผู้ใช้',  icon: UserGroupIcon },
-    { to: '/admin/system-settings', label: 'ตั้งค่าระบบ',   icon: ServerIcon },
+    { to: '/admin/users',           label: 'จัดการผู้ใช้',     icon: UserGroupIcon },
+    { to: '/admin/login-logs',      label: 'ประวัติเข้าระบบ',  icon: ShieldCheckIcon },
+    { to: '/admin/system-settings', label: 'ตั้งค่าระบบ',      icon: ServerIcon },
 ];
 
 const PROPERTY_MANAGER_LINKS = [

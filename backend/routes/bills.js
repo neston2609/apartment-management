@@ -295,13 +295,17 @@ router.get('/meter/:room_id', authenticate, adminOnly, async (req, res) => {
 });
 
 // ---------- Tenant: list own bills ----------
+// Joined with expense_settings so the tenant page can derive payment status
+// (รอชำระ / ชำระแล้ว / เกินกำหนด) using the same client-side helper as admin.
 router.get('/tenant/me', authenticate, async (req, res) => {
     if (req.user.role !== 'tenant') return res.status(403).json({ error: 'Forbidden' });
     try {
         const { rows } = await db.query(`
-            SELECT b.*, r.room_number
+            SELECT b.*, r.room_number,
+                   s.payment_due_day, s.late_fee_per_day
             FROM bills b
             JOIN rooms r ON r.room_id = b.room_id
+            LEFT JOIN expense_settings s ON s.apartment_id = r.apartment_id
             WHERE b.room_id = $1
             ORDER BY b.year DESC, b.month DESC
         `, [req.user.room_id]);

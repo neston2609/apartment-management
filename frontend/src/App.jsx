@@ -17,6 +17,7 @@ import Invoice from './pages/admin/Invoice';
 import Settings from './pages/admin/Settings';
 import Users from './pages/admin/Users';
 import SystemSettings from './pages/admin/SystemSettings';
+import LoginLogs from './pages/admin/LoginLogs';
 
 import TenantDashboard from './pages/tenant/TenantDashboard';
 import TenantBills from './pages/tenant/TenantBills';
@@ -53,6 +54,7 @@ export default function App() {
                 <Route path="settings" element={<Settings />} />
                 <Route path="users" element={<Users />} />
                 <Route path="system-settings" element={<SystemSettings />} />
+                <Route path="login-logs" element={<LoginLogs />} />
             </Route>
 
             {/* Tenant */}

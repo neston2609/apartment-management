@@ -16,6 +16,36 @@ const { authenticate, signToken, superAdminOnly } = require('../middleware/auth'
 
 const SALT_ROUNDS = 10;
 
+// ---------- Helpers ----------
+function clientIp(req) {
+    return (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+        || req.socket?.remoteAddress
+        || null;
+}
+
+// Best-effort logging — never throw out of here so a logging hiccup
+// can't break a real login response.
+async function recordLoginLog(req, { userKind, userId, identifier, success, errorReason }) {
+    try {
+        await db.query(
+            `INSERT INTO login_logs
+             (user_kind, user_id, identifier, success, error_reason, ip, user_agent)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [
+                userKind || null,
+                userId || null,
+                (identifier || '').toString().slice(0, 255),
+                !!success,
+                errorReason || null,
+                clientIp(req),
+                (req.headers['user-agent'] || '').toString().slice(0, 500),
+            ]
+        );
+    } catch (err) {
+        console.error('[auth/log]', err.message);
+    }
+}
+
 // ---------- Admin login ----------
 router.post(
     '/login',
@@ -25,19 +55,25 @@ router.post(
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
 
+        const { username, password } = req.body;
         try {
-            const { username, password } = req.body;
             const { rows } = await db.query(
                 `SELECT admin_id, username, password_hash, full_name, email, apartment_id,
                         is_super_admin, COALESCE(role, 'admin') AS role
                  FROM admin_users WHERE username = $1`,
                 [username]
             );
-            if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
+            if (!rows.length) {
+                await recordLoginLog(req, { userKind: null, userId: null, identifier: username, success: false, errorReason: 'unknown_user' });
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
 
             const a = rows[0];
             const ok = await bcrypt.compare(password, a.password_hash);
-            if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+            if (!ok) {
+                await recordLoginLog(req, { userKind: 'admin', userId: a.admin_id, identifier: username, success: false, errorReason: 'wrong_password' });
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
 
             const adminRole = a.role || (a.is_super_admin ? 'super_admin' : 'admin');
 
@@ -49,6 +85,8 @@ router.post(
                 is_super_admin: a.is_super_admin,
                 apartment_id: a.apartment_id,
             });
+
+            await recordLoginLog(req, { userKind: 'admin', userId: a.admin_id, identifier: username, success: true });
 
             return res.json({
                 data: {
@@ -73,6 +111,11 @@ router.post(
 );
 
 // ---------- Tenant login ----------
+// Accepts EITHER national_id OR room_number as the identifier.
+// Body field is still named `national_id` for backward compatibility, but
+// it can hold a national_id or a room_number. We try national_id first;
+// if that lookup returns no row we fall back to room_number (most recently
+// active tenant in that room).
 router.post(
     '/tenant/login',
     body('national_id').isString().trim().notEmpty(),
@@ -81,24 +124,52 @@ router.post(
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
 
+        const identifier = String(req.body.national_id).trim();
+        const { password } = req.body;
+
         try {
-            const { national_id, password } = req.body;
-            const { rows } = await db.query(
+            // 1) try by national_id
+            let { rows } = await db.query(
                 `SELECT t.tenant_id, t.full_name, t.national_id, t.password_hash,
                         t.room_id, t.is_active,
                         r.room_number, r.apartment_id
                  FROM tenants t
                  LEFT JOIN rooms r ON r.room_id = t.room_id
                  WHERE t.national_id = $1`,
-                [national_id]
+                [identifier]
             );
-            if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
+
+            // 2) fall back to room_number (active tenant in that room)
+            if (!rows.length) {
+                const r = await db.query(
+                    `SELECT t.tenant_id, t.full_name, t.national_id, t.password_hash,
+                            t.room_id, t.is_active,
+                            r.room_number, r.apartment_id
+                     FROM tenants t
+                     JOIN rooms r ON r.room_id = t.room_id
+                     WHERE r.room_number = $1 AND t.is_active = TRUE
+                     ORDER BY t.tenant_id DESC LIMIT 1`,
+                    [identifier]
+                );
+                rows = r.rows;
+            }
+
+            if (!rows.length) {
+                await recordLoginLog(req, { userKind: null, userId: null, identifier, success: false, errorReason: 'unknown_user' });
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
 
             const t = rows[0];
-            if (!t.is_active) return res.status(403).json({ error: 'Tenant is no longer active' });
+            if (!t.is_active) {
+                await recordLoginLog(req, { userKind: 'tenant', userId: t.tenant_id, identifier, success: false, errorReason: 'inactive' });
+                return res.status(403).json({ error: 'Tenant is no longer active' });
+            }
 
             const ok = await bcrypt.compare(password, t.password_hash);
-            if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+            if (!ok) {
+                await recordLoginLog(req, { userKind: 'tenant', userId: t.tenant_id, identifier, success: false, errorReason: 'wrong_password' });
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
 
             const token = signToken({
                 id: t.tenant_id,
@@ -106,6 +177,8 @@ router.post(
                 room_id: t.room_id,
                 apartment_id: t.apartment_id,
             });
+
+            await recordLoginLog(req, { userKind: 'tenant', userId: t.tenant_id, identifier, success: true });
 
             return res.json({
                 data: {

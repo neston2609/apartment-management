@@ -93,7 +93,8 @@ apartment-management-system/
 │   │   ├── bills.js                  # /api/bills/*
 │   │   ├── settings.js               # /api/settings/:apt
 │   │   ├── users.js                  # /api/users/*  (super-admin)
-│   │   └── system-settings.js        # /api/system-settings/* (super-admin)
+│   │   ├── system-settings.js        # /api/system-settings/* (super-admin)
+│   │   └── login-logs.js             # /api/login-logs (super-admin)
 │   └── utils/
 │       ├── pdf.js                    # contract + invoice (Thai/English) + bulk
 │       ├── contractDefaults.js       # DEFAULT_CONTRACT_TERMS
@@ -113,11 +114,12 @@ apartment-management-system/
         │   ├── Layout.jsx, Sidebar.jsx, Navbar.jsx
         │   ├── PrivateRoute.jsx, ChangePasswordModal.jsx
         │   └── common/{Modal,Table,Badge,Spinner,Alert}.jsx
+        ├── utils/billStatus.js        # paymentStatus() — derives รอชำระ/เกินกำหนด/...
         └── pages/
             ├── Login.jsx, ForgotPassword.jsx, ResetPassword.jsx
             ├── admin/{Dashboard,Apartments,Rooms,Tenants,TenantForm,
             │           Billing,BillingForm,BillingImport,Invoice,
-            │           Settings,Users,SystemSettings}.jsx
+            │           Settings,Users,SystemSettings,LoginLogs}.jsx
             └── tenant/{TenantDashboard,TenantBills,TenantContract,TenantProfile}.jsx
 ```
 
@@ -308,6 +310,19 @@ CREATE TABLE password_reset_tokens (
     used_at     TIMESTAMPTZ,
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Login activity log (every attempt — success or failure)
+CREATE TABLE login_logs (
+    log_id        SERIAL PRIMARY KEY,
+    user_kind     VARCHAR(20),                    -- 'admin' | 'tenant' | NULL when unknown user
+    user_id       INTEGER,                        -- admin_id or tenant_id (NULL on unknown)
+    identifier    TEXT,                           -- the username / national_id / room_number entered
+    success       BOOLEAN NOT NULL,
+    error_reason  TEXT,                           -- 'unknown_user' | 'wrong_password' | 'inactive'
+    ip            TEXT,
+    user_agent    TEXT,
+    created_at    TIMESTAMPTZ DEFAULT NOW()
+);
 ```
 
 ### 6.3 Indexes
@@ -327,6 +342,9 @@ CREATE INDEX idx_expense_settings_apt      ON expense_settings(apartment_id);
 CREATE INDEX idx_admin_users_role          ON admin_users(role);
 CREATE INDEX idx_prt_token                 ON password_reset_tokens(token);
 CREATE INDEX idx_prt_user                  ON password_reset_tokens(user_kind, user_id);
+CREATE INDEX idx_login_logs_created_at     ON login_logs(created_at DESC);
+CREATE INDEX idx_login_logs_user           ON login_logs(user_kind, user_id);
+CREATE INDEX idx_login_logs_success        ON login_logs(success);
 ```
 
 ### 6.4 Seed default `system_settings` rows
@@ -383,7 +401,8 @@ signToken(payload)
 | Settings (per-apartment expense + contract)  | ✅ | ✅ | ❌ | ❌ |
 | User Management (`/admin/users`)             | ✅ | ❌ | ❌ | ❌ |
 | System Settings — SMTP (`/admin/system-settings`) | ✅ | ❌ | ❌ | ❌ |
-| Tenant own dashboard / bills / contract / profile | ❌ | ❌ | ❌ | ✅ |
+| Login activity log (`/admin/login-logs`)     | ✅ | ❌ | ❌ | ❌ |
+| Tenant own dashboard / bills / contract / profile (incl. payment status) | ❌ | ❌ | ❌ | ✅ |
 
 The Sidebar (`frontend/src/components/Sidebar.jsx`) is the source of truth for visibility. After login, all admin sub-roles redirect to `/admin/dashboard`; tenants redirect to `/tenant/dashboard`.
 
@@ -398,7 +417,7 @@ The Sidebar (`frontend/src/components/Sidebar.jsx`) is the source of truth for v
 
 **Frontend guards for property_manager** (driven by `useAuth().user.admin_role`):
 - `Apartments.jsx` — hide "เพิ่มอพาร์ทเมนต์" button + "แก้ไข" / "ลบ" actions per row. The "ห้องพัก / ตั้งราคา" link is always visible.
-- `Rooms.jsx` — hide "ปรับราคาทั้งชั้น" button. Single-room edit modal is fully usable (status, notes, price, room_number).
+- `Rooms.jsx` — hide "ปรับราคาทั้งชั้น" button, the "+ เพิ่มห้อง" tile, and the "ลบห้อง" button in the edit modal. Single-room edit modal is otherwise fully usable (status, notes, price, room_number).
 - `Tenants.jsx` — hide "เพิ่มผู้เช่า" button + "ย้ายออก" action per row. "แก้ไข" + "สัญญา" stay visible.
 - `Billing.jsx` — hide header buttons "✓ ชำระแล้วทุกห้อง" + "นำเข้าจาก Excel", and the per-row mark-paid / mark-unpaid action. "สร้าง" / "แก้ไข" links stay visible.
 
@@ -418,7 +437,7 @@ All responses use the envelope `{ data: ... }` for success and `{ error: 'messag
 | Method | Path                      | Auth                | Body / behaviour |
 |--------|---------------------------|---------------------|------------------|
 | POST   | `/login`                   | public              | `{ username, password }` → `{ token, user }` (admin) |
-| POST   | `/tenant/login`            | public              | `{ national_id, password }` → `{ token, user }` (only when `is_active = TRUE`) |
+| POST   | `/tenant/login`            | public              | `{ national_id, password }` → `{ token, user }` (only when `is_active = TRUE`). The `national_id` field also accepts a **room number** — server first looks up by `tenants.national_id`; if no match, falls back to the active tenant in `rooms.room_number = $identifier`. |
 | POST   | `/register-admin`          | super-admin         | `{ username, password (≥6), full_name?, email?, apartment_id?, role? }`. Maps `role==='super_admin'` to `is_super_admin=true`. |
 | PUT    | `/change-password`         | any logged-in       | `{ old_password, new_password (≥6) }` (works for both admin and tenant — picks table by `req.user.role`) |
 | POST   | `/forgot-password`         | public              | `{ identifier }` (email / username / national_id). Always responds `{sent:true}` (don't leak existence). Generates 32-byte hex token, stores in `password_reset_tokens` (1-hour expiry), sends email with link `<app_base_url>/reset-password?token=...`. |
@@ -452,10 +471,16 @@ All responses use the envelope `{ data: ... }` for success and `{ error: 'messag
 | Method | Path                    | Roles |
 |--------|-------------------------|-------|
 | GET    | `/:id`                   | any admin |
+| POST   | `/`                      | super_admin, admin |
 | PUT    | `/:id`                   | any admin (`property_manager` allowed for misc fields) |
+| DELETE | `/:id`                   | super_admin, admin |
 | PUT    | `/bulk/floor-price`      | super_admin, admin |
 
+`POST /` body: `{ apartment_id, floor_number, room_number, rental_price?, status?, notes? }`. Auto-computes `room_sequence = max(seq for that floor) + 1`. Rejects duplicate `room_number` within the same apartment (`23505 → 409`).
+
 `PUT /:id` body: `{ rental_price?, status?, room_number?, notes? }`. Rejects duplicate `room_number` within the same apartment (`23505 → 409`).
+
+`DELETE /:id` refuses (`409`) if there's an active tenant in the room. Bills + meter readings cascade automatically (FK `ON DELETE CASCADE`).
 
 `PUT /bulk/floor-price` body: `{ apartment_id, floor_number, rental_price }`.
 
@@ -588,7 +613,17 @@ smtp_host, smtp_port, smtp_secure, smtp_user, smtp_password, smtp_from, app_base
 
 `POST /test-email` body: `{ to }`. Sends a small Thai test email via the current SMTP settings.
 
-### 8.9 Mailer (`backend/utils/mailer.js`)
+### 8.9 `/api/login-logs` (super-admin)
+
+| Method | Path | Query |
+|--------|------|-------|
+| GET    | `/`  | `limit` (default 100, max 500), `offset` (default 0), `user_kind` (`admin`/`tenant`), `success` (`true`/`false`) |
+
+Returns `{ logs: [...], total: N }`. Each row includes the raw `login_logs` columns plus a resolved `user_name` / `user_login` / `user_room` (LEFT JOINed from `admin_users` or `tenants` based on `user_kind`).
+
+`backend/routes/auth.js` writes a row on every admin- and tenant-login attempt — success or failure — via a `recordLoginLog(req, {...})` helper. The helper is best-effort; logging failures are caught and never break the actual login response. It captures `ip` (from `x-forwarded-for` or `socket.remoteAddress`) and `user_agent` (truncated to 500 chars).
+
+### 8.10 Mailer (`backend/utils/mailer.js`)
 
 Reads SMTP config at send-time (so saving in the UI takes immediate effect). Throws `'SMTP not configured...'` if `smtp_host` or `smtp_user` is empty.
 
@@ -813,7 +848,8 @@ CATCH-ALL
 ### 12.1 Login (`pages/Login.jsx`)
 
 - Tab switcher between `'admin' | 'tenant'`. **Selected tab uses dark brand color** (`bg-brand-700 text-white font-semibold`); unselected is muted.
-- Admin: username + password. Tenant: national_id + password.
+- Admin: username + password.
+- Tenant: **national_id OR room_number** + password. The label reads "เลขบัตรประชาชน หรือ เลขห้อง" with helper text "ระบบจะตรวจเลขบัตรก่อน หากไม่พบจะใช้เลขห้องค้นหาแทน". The body field name on the wire is still `national_id` for backward compatibility.
 - After login, redirect by role (see §7.3).
 - "ลืมรหัสผ่าน?" link → `/forgot-password`.
 
@@ -851,7 +887,7 @@ Filter logic: `bills.filter(b => statuses.includes(b.status))` then sum `water_c
 
 ### 12.6 Rooms (`pages/admin/Rooms.jsx`)
 
-- Grouped by floor, color-coded grid:
+- Grouped by floor, color-coded grid. Within each floor, rooms are sorted by `room_number` (numeric when both numeric, else lexicographic — so 101 < 102 < 1010 reads correctly):
   ```
   occupied    → green
   vacant      → slate
@@ -860,7 +896,9 @@ Filter logic: `bills.filter(b => statuses.includes(b.status))` then sum `water_c
   caretaker   → purple
   ```
 - Click a room to edit price, status, room_number, and free-text notes.
-- "ปรับราคาทั้งชั้น" button → `PUT /rooms/bulk/floor-price`.
+- The edit modal includes a red **"ลบห้อง"** button (left side of footer) that calls `DELETE /rooms/:id`. Confirms via `window.confirm` first. Hidden for property_manager. Server rejects if the room still has an active tenant.
+- A dashed **"+ เพิ่มห้อง"** tile is rendered as the last cell on every floor. Clicking it opens an add-room modal pre-filled with: `room_number = max(existing numeric room numbers on that floor) + 1` (or `floor + "01"` if none), `rental_price = first existing room's price` (or 0), `status = vacant`. Submits to `POST /rooms`. Hidden for property_manager.
+- "ปรับราคาทั้งชั้น" button → `PUT /rooms/bulk/floor-price`. Hidden for property_manager.
 
 ### 12.7 Tenants (`pages/admin/Tenants.jsx`)
 
@@ -932,10 +970,19 @@ Listing page:
 - 7 SMTP keys + `app_base_url`. SMTP password is `type='password'`. The Gmail App Password instructions sit in an `<details>` info box.
 - Below: a "ทดสอบส่งอีเมล" card with one email input + "ส่งทดสอบ" → `POST /system-settings/test-email`.
 
+### 12.14.5 Login Logs (super-admin) (`pages/admin/LoginLogs.jsx`)
+
+- Table of recent login attempts (newest first). Columns: เวลา (Buddhist DD/MM/YYYY HH:MM), ผลลัพธ์ (สำเร็จ/ไม่สำเร็จ pill), ประเภท (admin/tenant pill), ชื่อผู้ใช้/เลขบัตร (with resolved full_name + room number sub-line for tenants), รายละเอียด (`error_reason` translated to Thai), IP.
+- Filters: ประเภท (admin/tenant/ทั้งหมด), ผลลัพธ์ (สำเร็จ/ไม่สำเร็จ/ทั้งหมด).
+- Pagination: 100 per page, "ก่อนหน้า / ถัดไป" buttons. Total + range shown in the filter bar.
+- Calls `GET /api/login-logs?limit=&offset=&user_kind=&success=`.
+
 ### 12.15 Tenant pages
 
-- **TenantDashboard** — greeting with full_name + room_number, current-month bill total card linking to `/tenant/bills`, quick links to bills + contract.
-- **TenantBills** — fetches `GET /bills/tenant/me`, year selector (only years that exist + current), table with all 5 cost columns + total, current-month row highlighted blue, per-row "ดาวน์โหลด PDF" (size A5, lang th).
+Tenant pages use the same `paymentStatus()` helper as admin (`frontend/src/utils/billStatus.js`) so tenants see the **same 4 statuses** for their own bills (ออกบิลแล้ว / รอชำระ / ชำระค่าเช่าแล้ว / เกินกำหนด with late fee). The `GET /api/bills/tenant/me` endpoint is JOINed with `expense_settings` so the tenant pages get `payment_due_day` + `late_fee_per_day` for free.
+
+- **TenantDashboard** — greeting with full_name + room_number, current-month bill total card. If a bill exists, render the payment-status pill below the total; if overdue, show "เลย N วัน · ค่าปรับ ฿X.XX → ยอดที่ต้องชำระ ฿Y.YY". Plus quick links to bills + contract.
+- **TenantBills** — fetches `GET /bills/tenant/me`, year selector (only years that exist + current), table with **status column** (payment-status pill + late-fee inline for overdue), 4 cost columns + total (with "+ค่าปรับ → ฿Y.YY" sub-line if overdue). Current-month row highlighted blue, per-row "ดาวน์โหลด PDF".
 - **TenantContract** — info card with full_name / room / national_id, button → `GET /tenants/:id/contract` (where `:id` = self).
 - **TenantProfile** — fetches `GET /tenants/:id`, allows updating full_name, phone_number, national_id, email, address. Saves via `PUT /tenants/me/profile`. After save, refresh local AuthContext user (so navbar updates).
 
@@ -1169,6 +1216,7 @@ psql ... -f database/migrate-001-add-role.sql
 psql ... -f database/migrate-002-rooms-and-system.sql
 psql ... -f database/migrations/001_add_contract_terms.sql
 psql ... -f database/migrations/002_add_payment_status.sql
+psql ... -f database/migrations/003_add_login_logs.sql
 
 # 4. Seed sample data + admin account
 node database/seed.js
@@ -1286,6 +1334,15 @@ Before considering an implementation complete, verify:
 □ Default reporting month: defaultReportingMonth() in utils/api.js — before the 25th
   shows previous month, on/after the 25th shows current month. Used in Dashboard,
   Billing, Invoice, TenantDashboard, TenantBills.
+□ Tenants see their own payment status (ออกบิลแล้ว / รอชำระ / ชำระแล้ว / เกินกำหนด)
+  on TenantDashboard + TenantBills using shared paymentStatus() helper.
+□ Tenant login accepts national_id OR room_number — server tries national_id
+  first, falls back to active tenant by room_number.
+□ Every login attempt (admin + tenant, success and failure) is recorded in
+  login_logs with ip, user_agent, error_reason. Best-effort — logging errors
+  must not break the login response.
+□ Super-admin can browse login_logs at /admin/login-logs with filters by user
+  kind and success/failure.
 □ Settings page exposes payment_due_day (1-31, optional) and late_fee_per_day.
 □ Settings page pre-fills contract_terms textarea with defaults when empty; "คืนค่าเริ่มต้น"
   resets it.

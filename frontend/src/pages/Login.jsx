@@ -62,11 +62,15 @@ export default function Login() {
                         </div>
                     ) : (
                         <div>
-                            <label className="block text-sm font-medium text-slate-600">เลขบัตรประชาชน</label>
+                            <label className="block text-sm font-medium text-slate-600">เลขบัตรประชาชน หรือ เลขห้อง</label>
                             <input type="text" required
+                                   placeholder="กรอกเลขบัตรประชาชน หรือเลขห้องของคุณ"
                                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-brand-500"
                                    value={form.national_id}
                                    onChange={(e) => setForm({ ...form, national_id: e.target.value })} />
+                            <p className="mt-1 text-xs text-slate-400">
+                                ระบบจะตรวจเลขบัตรก่อน หากไม่พบจะใช้เลขห้องค้นหาแทน
+                            </p>
                         </div>
                     )}
                     <div>

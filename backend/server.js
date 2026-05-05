@@ -26,6 +26,7 @@ app.use('/api/bills',           require('./routes/bills'));
 app.use('/api/settings',        require('./routes/settings'));
 app.use('/api/users',           require('./routes/users'));
 app.use('/api/system-settings', require('./routes/system-settings'));
+app.use('/api/login-logs',      require('./routes/login-logs'));
 
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 

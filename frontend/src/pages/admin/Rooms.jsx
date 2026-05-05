@@ -36,6 +36,12 @@ export default function Rooms() {
     const [bulkFloor, setBulkFloor] = useState(1);
     const [bulkPrice, setBulkPrice] = useState(0);
 
+    // Add-room modal state
+    const [addFloor, setAddFloor] = useState(null);   // null = closed; number = open for that floor
+    const [addForm, setAddForm]   = useState({ room_number: '', rental_price: 0, status: 'vacant', notes: '' });
+    const [addBusy, setAddBusy]   = useState(false);
+    const [delBusy, setDelBusy]   = useState(false);
+
     const load = async () => {
         setLoading(true);
         try {
@@ -48,6 +54,15 @@ export default function Rooms() {
 
     useEffect(() => { load(); }, [apartmentId]);
 
+    // Compare room numbers naturally: numeric if both sides parse as numbers,
+    // otherwise lexicographic. So "101" < "102" < "1010" reads correctly.
+    const cmpRoom = (a, b) => {
+        const na = Number(a.room_number);
+        const nb = Number(b.room_number);
+        if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+        return String(a.room_number).localeCompare(String(b.room_number));
+    };
+
     const byFloor = useMemo(() => {
         const groups = {};
         rooms.forEach((r) => {
@@ -55,8 +70,78 @@ export default function Rooms() {
             if (!groups[f]) groups[f] = [];
             groups[f].push(r);
         });
+        // Sort rooms within each floor by room_number
+        Object.values(groups).forEach((list) => list.sort(cmpRoom));
         return Object.entries(groups).sort(([a], [b]) => Number(a) - Number(b));
     }, [rooms]);
+
+    // Suggest the next room number for a floor: take max numeric room_number on
+    // that floor and add 1; if none, default to floor + "01".
+    const suggestNextRoomNumber = (floor) => {
+        const onFloor = rooms.filter((r) => r.floor_number === Number(floor));
+        const nums = onFloor
+            .map((r) => Number(r.room_number))
+            .filter(Number.isFinite);
+        if (nums.length) return String(Math.max(...nums) + 1);
+        return `${floor}${String(1).padStart(2, '0')}`;
+    };
+
+    const startAdd = (floor) => {
+        const f = Number(floor);
+        // Default rental price = price of any existing room on that floor (or 0)
+        const onFloor = rooms.filter((r) => r.floor_number === f);
+        const defaultPrice = onFloor.length ? Number(onFloor[0].rental_price) : 0;
+        setAddForm({
+            room_number:  suggestNextRoomNumber(f),
+            rental_price: defaultPrice,
+            status:       'vacant',
+            notes:        '',
+        });
+        setAddFloor(f);
+    };
+
+    const submitAdd = async () => {
+        if (addFloor == null) return;
+        const room_number = String(addForm.room_number || '').trim();
+        if (!room_number) {
+            toast.error('กรุณาระบุเลขห้อง');
+            return;
+        }
+        setAddBusy(true);
+        try {
+            await api.post('/rooms', {
+                apartment_id: parseInt(apartmentId, 10),
+                floor_number: addFloor,
+                room_number,
+                rental_price: Number(addForm.rental_price) || 0,
+                status:       addForm.status || 'vacant',
+                notes:        addForm.notes || null,
+            });
+            toast.success('เพิ่มห้องเรียบร้อย');
+            setAddFloor(null);
+            await load();
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'เพิ่มห้องล้มเหลว');
+        } finally { setAddBusy(false); }
+    };
+
+    const submitDelete = async () => {
+        if (!editing) return;
+        const ok = window.confirm(
+            `ยืนยันการลบห้อง ${editing.room_number} ?\n` +
+            `การลบจะลบใบแจ้งหนี้และมิเตอร์ของห้องนี้ทั้งหมดด้วย และไม่สามารถย้อนกลับได้`
+        );
+        if (!ok) return;
+        setDelBusy(true);
+        try {
+            await api.delete(`/rooms/${editing.room_id}`);
+            toast.success('ลบห้องเรียบร้อย');
+            setEditing(null);
+            await load();
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'ลบห้องล้มเหลว');
+        } finally { setDelBusy(false); }
+    };
 
     const startEdit = (room) => {
         setEditing(room);
@@ -133,6 +218,13 @@ export default function Rooms() {
                                 )}
                             </button>
                         ))}
+                        {!isPropertyManager && (
+                            <button type="button" onClick={() => startAdd(floor)}
+                                    className="border-2 border-dashed border-slate-300 rounded-lg p-3 text-slate-500 hover:border-brand-500 hover:text-brand-600 hover:bg-brand-50 transition flex flex-col items-center justify-center min-h-[7rem]">
+                                <span className="text-2xl leading-none">+</span>
+                                <span className="text-xs mt-1">เพิ่มห้อง</span>
+                            </button>
+                        )}
                     </div>
                 </div>
             ))}
@@ -142,6 +234,12 @@ export default function Rooms() {
                    onClose={() => setEditing(null)}
                    footer={
                        <>
+                           {!isPropertyManager && editing && (
+                               <button type="button" onClick={submitDelete} disabled={delBusy}
+                                       className="mr-auto px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md disabled:opacity-50">
+                                   {delBusy ? 'กำลังลบ...' : 'ลบห้อง'}
+                               </button>
+                           )}
                            <button onClick={() => setEditing(null)} className="px-3 py-1.5 text-sm text-slate-600">ยกเลิก</button>
                            <button onClick={submit} className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md">บันทึก</button>
                        </>
@@ -204,6 +302,56 @@ export default function Rooms() {
                                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
                                value={bulkPrice}
                                onChange={(e) => setBulkPrice(parseFloat(e.target.value) || 0)} />
+                    </label>
+                </div>
+            </Modal>
+
+            <Modal open={addFloor != null}
+                   title={addFloor != null ? `เพิ่มห้องในชั้น ${addFloor}` : ''}
+                   onClose={() => setAddFloor(null)}
+                   footer={
+                       <>
+                           <button onClick={() => setAddFloor(null)} className="px-3 py-1.5 text-sm text-slate-600">ยกเลิก</button>
+                           <button onClick={submitAdd} disabled={addBusy}
+                                   className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md disabled:opacity-50">
+                               {addBusy ? 'กำลังบันทึก...' : 'เพิ่มห้อง'}
+                           </button>
+                       </>
+                   }>
+                <div className="space-y-3 text-sm">
+                    <label className="block">
+                        <span className="text-slate-600">เลขห้อง</span>
+                        <input type="text"
+                               className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                               value={addForm.room_number}
+                               onChange={(e) => setAddForm({ ...addForm, room_number: e.target.value })} />
+                        <span className="text-xs text-slate-500">ต้องไม่ซ้ำกับห้องอื่นในอพาร์ทเมนต์เดียวกัน</span>
+                    </label>
+                    <label className="block">
+                        <span className="text-slate-600">ราคาเช่า (บาท/เดือน)</span>
+                        <input type="number" min={0}
+                               className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                               value={addForm.rental_price}
+                               onChange={(e) => setAddForm({ ...addForm, rental_price: parseFloat(e.target.value) || 0 })} />
+                    </label>
+                    <label className="block">
+                        <span className="text-slate-600">สถานะ</span>
+                        <select className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                                value={addForm.status}
+                                onChange={(e) => setAddForm({ ...addForm, status: e.target.value })}>
+                            {STATUS_OPTIONS.filter((s) => s.value !== 'occupied').map((s) =>
+                                <option key={s.value} value={s.value}>{s.label}</option>)}
+                        </select>
+                        <span className="text-xs text-slate-500">
+                            ห้องใหม่ยังไม่มีผู้เช่า — สถานะ "มีผู้เช่า" จะตั้งอัตโนมัติเมื่อเพิ่มผู้เช่าในภายหลัง
+                        </span>
+                    </label>
+                    <label className="block">
+                        <span className="text-slate-600">หมายเหตุ</span>
+                        <textarea rows={2}
+                                  className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                                  value={addForm.notes}
+                                  onChange={(e) => setAddForm({ ...addForm, notes: e.target.value })} />
                     </label>
                 </div>
             </Modal>

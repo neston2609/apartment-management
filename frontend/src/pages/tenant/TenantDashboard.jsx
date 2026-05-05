@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear, defaultReportingMonth } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import Spinner from '../../components/common/Spinner';
+import { paymentStatus } from '../../utils/billStatus';
 
 export default function TenantDashboard() {
     const { user } = useAuth();
@@ -31,14 +32,31 @@ export default function TenantDashboard() {
                 <p className="text-xs text-slate-500">
                     ใบแจ้งหนี้ประจำเดือน {THAI_MONTHS[period.month - 1]} {thaiYear(period.year)}
                 </p>
-                {current ? (
-                    <>
-                        <p className="text-3xl font-bold text-brand-700 mt-1">฿ {fmtMoney(current.total_cost)}</p>
-                        <Link to="/tenant/bills" className="text-sm text-brand-600 hover:underline mt-2 inline-block">
-                            ดูรายละเอียด →
-                        </Link>
-                    </>
-                ) : (
+                {current ? (() => {
+                    const ps = paymentStatus(current);
+                    const lateFee = ps?.kind === 'overdue' ? ps.late_fee : 0;
+                    const grand = Number(current.total_cost) + lateFee;
+                    return (
+                        <>
+                            <p className="text-3xl font-bold text-brand-700 mt-1">฿ {fmtMoney(current.total_cost)}</p>
+                            {ps && (
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${ps.cls}`}>
+                                        {ps.label}
+                                    </span>
+                                    {ps.kind === 'overdue' && (
+                                        <span className="text-xs text-red-700">
+                                            เลย {ps.days_overdue} วัน · ค่าปรับ ฿ {fmtMoney(ps.late_fee)} → ยอดที่ต้องชำระ ฿ {fmtMoney(grand)}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                            <Link to="/tenant/bills" className="text-sm text-brand-600 hover:underline mt-2 inline-block">
+                                ดูรายละเอียด →
+                            </Link>
+                        </>
+                    );
+                })() : (
                     <p className="text-slate-400 mt-2">ยังไม่มีใบแจ้งหนี้สำหรับเดือนนี้</p>
                 )}
             </div>
