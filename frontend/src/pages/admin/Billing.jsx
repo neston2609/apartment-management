@@ -190,11 +190,15 @@ export default function Billing() {
                                             </td>
                                             <td className="px-4 py-2 text-right">
                                                 <div className="flex flex-col items-end gap-0.5 text-xs">
-                                                    <Link to={`/admin/billing/${r.room_id}/${month}/${year}`}
-                                                          className="text-brand-600 hover:underline">
-                                                        {hasBill ? 'แก้ไข' : 'สร้าง'}
-                                                    </Link>
-                                                    {hasBill && !isPropertyManager && (
+                                                    {/* property_manager ไม่สามารถสร้าง/แก้ไขบิล */}
+                                                    {!isPropertyManager && (
+                                                        <Link to={`/admin/billing/${r.room_id}/${month}/${year}`}
+                                                              className="text-brand-600 hover:underline">
+                                                            {hasBill ? 'แก้ไข' : 'สร้าง'}
+                                                        </Link>
+                                                    )}
+                                                    {/* แต่กดเปลี่ยนสถานะบิลเป็นชำระแล้ว/ยกเลิกได้ทุก admin role */}
+                                                    {hasBill && (
                                                         <button onClick={() => togglePaid(b)}
                                                                 disabled={busyId === b.bill_id}
                                                                 className={`hover:underline disabled:opacity-50 ${

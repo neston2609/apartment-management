@@ -395,8 +395,9 @@ signToken(payload)
 | Tenants — edit existing tenant + download contract | ✅ | ✅ | ✅ | ❌ |
 | Tenants — create new / move-out              | ✅ | ✅ | ❌ | ❌ |
 | Billing — list page                          | ✅ | ✅ | ✅ | ❌ |
-| Billing — create / edit individual bills (BillingForm) | ✅ | ✅ | ✅ | ❌ |
-| Billing — Excel import / mark-paid / mark-unpaid / bulk-mark-paid | ✅ | ✅ | ❌ | ❌ |
+| Billing — create / edit individual bills (BillingForm) | ✅ | ✅ | ❌ | ❌ |
+| Billing — Excel import / bulk-mark-paid                | ✅ | ✅ | ❌ | ❌ |
+| Billing — mark-paid / mark-unpaid (per row)            | ✅ | ✅ | ✅ | ❌ |
 | Print Invoice page (single + bulk PDF)       | ✅ | ✅ | ✅ | ❌ |
 | Settings (per-apartment expense + contract)  | ✅ | ✅ | ❌ | ❌ |
 | User Management (`/admin/users`)             | ✅ | ❌ | ❌ | ❌ |
@@ -411,7 +412,7 @@ The Sidebar (`frontend/src/components/Sidebar.jsx`) is the source of truth for v
 /admin/dashboard   แดชบอร์ด
 /admin/apartments  อพาร์ทเมนต์         (read-only list — used as a gateway to /admin/rooms/:id)
 /admin/tenants     ผู้เช่า              (edit existing tenants, download contract)
-/admin/billing     ใบแจ้งค่าเช่า        (create/edit bills only — no import / payment toggle)
+/admin/billing     ใบแจ้งค่าเช่า        (mark-paid / mark-unpaid only — cannot create or edit bills)
 /admin/invoice     พิมพ์ใบแจ้งหนี้
 ```
 
@@ -419,11 +420,11 @@ The Sidebar (`frontend/src/components/Sidebar.jsx`) is the source of truth for v
 - `Apartments.jsx` — hide "เพิ่มอพาร์ทเมนต์" button + "แก้ไข" / "ลบ" actions per row. The "ห้องพัก / ตั้งราคา" link is always visible.
 - `Rooms.jsx` — hide "ปรับราคาทั้งชั้น" button, the "+ เพิ่มห้อง" tile, and the "ลบห้อง" button in the edit modal. Single-room edit modal is otherwise fully usable (status, notes, price, room_number).
 - `Tenants.jsx` — hide "เพิ่มผู้เช่า" button + "ย้ายออก" action per row. "แก้ไข" + "สัญญา" stay visible.
-- `Billing.jsx` — hide header buttons "✓ ชำระแล้วทุกห้อง" + "นำเข้าจาก Excel", and the per-row mark-paid / mark-unpaid action. "สร้าง" / "แก้ไข" links stay visible.
+- `Billing.jsx` — hide header buttons "✓ ชำระแล้วทุกห้อง" + "นำเข้าจาก Excel", and the per-row "สร้าง" / "แก้ไข" link. The per-row "✓ ทำเครื่องหมายชำระแล้ว" / "ยกเลิกการชำระ" button **stays visible** — property_manager can toggle payment status on existing bills.
 
 **Backend enforcement** (the source of truth):
-- `requireAdminRoles('super_admin', 'admin')` (alias `fullAdmin`) — guards apartment create/update/delete, room bulk floor-price, tenant create / move-out, settings PUT, billing import, mark-paid / mark-unpaid / bulk-mark-paid.
-- Bill create/update (`POST /api/bills`, `PUT /api/bills/:id`) only requires `adminOnly` — property_manager passes.
+- `requireAdminRoles('super_admin', 'admin')` (alias `fullAdmin`) — guards apartment create/update/delete, room bulk floor-price, tenant create / move-out, settings PUT, billing import, bulk-mark-paid, **bill create/update** (`POST /api/bills`, `PUT /api/bills/:id`).
+- Bill mark-paid / mark-unpaid (`POST /api/bills/:id/mark-paid`, `/mark-unpaid`) only require `adminOnly` — property_manager passes.
 - All other admin routes (any tenant edit, single-room edit, listing endpoints, contract PDF, invoice PDF) only require `adminOnly` — property_manager passes.
 
 ---
@@ -512,10 +513,10 @@ All responses use the envelope `{ data: ... }` for success and `{ error: 'messag
 |--------|-----------------------------------|------|
 | GET    | `/?month=&year=&apartment_id=`    | any admin |
 | GET    | `/:id`                            | admin OR tenant if same room |
-| POST   | `/`                               | any admin (incl. property_manager) |
-| PUT    | `/:id`                            | any admin (incl. property_manager) |
-| POST   | `/:id/mark-paid`                  | super_admin, admin |
-| POST   | `/:id/mark-unpaid`                | super_admin, admin |
+| POST   | `/`                               | super_admin, admin |
+| PUT    | `/:id`                            | super_admin, admin |
+| POST   | `/:id/mark-paid`                  | any admin (incl. property_manager) |
+| POST   | `/:id/mark-unpaid`                | any admin (incl. property_manager) |
 | POST   | `/bulk-mark-paid`                 | super_admin, admin |
 | GET    | `/meter/:room_id?month=&year=`    | any admin |
 | GET    | `/tenant/me`                      | tenant — list own bills |
@@ -860,9 +861,10 @@ CATCH-ALL
 
 ### 12.3 Layout / Sidebar / Navbar
 
-- Sidebar (`md:` and up): dark `slate-900`, brand link active state `bg-brand-600 text-white`. Logo block + nav + small footer "v1.0 © Apartment MS".
-- Sidebar links per role (see §7.3 + Sidebar code).
-- Navbar shows current role label, user name, two buttons: "เปลี่ยนรหัสผ่าน" (opens `ChangePasswordModal`) and "ออกจากระบบ".
+- **Desktop layout (`md:` and up)** — fixed left Sidebar (dark `slate-900`, 256px wide). Brand link active state `bg-brand-600 text-white`. Logo block + nav + small footer "v1.0 © Apartment MS".
+- **Mobile layout (`< md`)** — Sidebar is hidden by default. The Navbar shows a hamburger button (`Bars3Icon`) on the left; pressing it opens a slide-in **drawer** rendered as a fixed full-screen overlay (`md:hidden`). The drawer is a 72-width dark panel on the left + a tap-through black-40 backdrop on the right. The drawer uses the **same** link list as the desktop sidebar; clicking a link auto-closes the drawer (NavLink `onClick={onClose}`). An `XMarkIcon` close button sits in the drawer header.
+- `Layout.jsx` owns the `mobileOpen` state and passes it down: `<Sidebar mobileOpen onClose />` for the drawer, `<Navbar onMenuClick />` for the hamburger.
+- Navbar shows current role label, user name (hidden on `< sm`), two buttons: "เปลี่ยนรหัสผ่าน" (opens `ChangePasswordModal`) and "ออกจากระบบ". On narrow screens the buttons collapse to icon-only with a `title` tooltip.
 - `ChangePasswordModal` validates ≥6 chars + match-confirm, calls `PUT /auth/change-password`.
 
 ### 12.4 Dashboard (`pages/admin/Dashboard.jsx`)
@@ -1343,6 +1345,9 @@ Before considering an implementation complete, verify:
   must not break the login response.
 □ Super-admin can browse login_logs at /admin/login-logs with filters by user
   kind and success/failure.
+□ Layout is responsive: at md and up the left Sidebar is shown; below md the
+  Sidebar is hidden and a hamburger button in the Navbar opens a slide-in
+  drawer with the same links. Tapping a link or the backdrop closes the drawer.
 □ Settings page exposes payment_due_day (1-31, optional) and late_fee_per_day.
 □ Settings page pre-fills contract_terms textarea with defaults when empty; "คืนค่าเริ่มต้น"
   resets it.
@@ -1351,9 +1356,9 @@ Before considering an implementation complete, verify:
 □ Login tab switcher highlights the selected tab in dark brand color.
 □ Three admin roles function correctly:
      property_manager sees Dashboard, Apartments (read-only), Tenants (edit existing only),
-       Billing (create/edit individual bills only — no import / mark-paid / bulk-mark-paid),
-       and Print Invoice — but no Settings/Users/System Settings, no add/delete actions,
-       no bulk floor-price, no move-out;
+       Billing (mark-paid / mark-unpaid only — cannot create/edit bills, no import,
+       no bulk-mark-paid), and Print Invoice — but no Settings/Users/System Settings,
+       no add/delete actions, no bulk floor-price, no move-out;
      admin sees everything except Users + System Settings;
      super_admin sees everything.
 □ Forgot-password emails a single-use 1-hour token; reset-password updates the right user.

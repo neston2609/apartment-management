@@ -97,8 +97,8 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 // ---------- Create or upsert bill + meter reading ----------
-// Any admin role (incl. property_manager) may create/edit individual bills.
-router.post('/', authenticate, adminOnly, async (req, res) => {
+// Only super_admin / admin may create or edit bills (property_manager cannot).
+router.post('/', authenticate, adminOnly, fullAdmin, async (req, res) => {
     const client = await db.getClient();
     try {
         await client.query('BEGIN');
@@ -189,7 +189,7 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
 });
 
 // ---------- Update bill (same upsert path) ----------
-router.put('/:id', authenticate, adminOnly, async (req, res) => {
+router.put('/:id', authenticate, adminOnly, fullAdmin, async (req, res) => {
     const client = await db.getClient();
     try {
         await client.query('BEGIN');
@@ -494,7 +494,8 @@ router.post('/import', authenticate, adminOnly, fullAdmin, async (req, res) => {
 // ---------- Mark a bill as paid / unpaid ----------
 // POST /api/bills/:id/mark-paid    body: { paid_at? }  (defaults to NOW)
 // POST /api/bills/:id/mark-unpaid
-router.post('/:id/mark-paid', authenticate, adminOnly, fullAdmin, async (req, res) => {
+// Any admin role (incl. property_manager) may toggle the payment status.
+router.post('/:id/mark-paid', authenticate, adminOnly, async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         const when = req.body?.paid_at ? new Date(req.body.paid_at) : new Date();
@@ -515,7 +516,7 @@ router.post('/:id/mark-paid', authenticate, adminOnly, fullAdmin, async (req, re
     }
 });
 
-router.post('/:id/mark-unpaid', authenticate, adminOnly, fullAdmin, async (req, res) => {
+router.post('/:id/mark-unpaid', authenticate, adminOnly, async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         const { rows } = await db.query(
