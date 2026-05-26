@@ -2,11 +2,19 @@
  * /api/bills
  */
 const router = require('express').Router();
-const db = require('../config/database');
+const path   = require('path');
+const fs     = require('fs');
+const db     = require('../config/database');
 const { authenticate, adminOnly, requireAdminRoles } = require('../middleware/auth');
 const fullAdmin = requireAdminRoles('super_admin', 'admin');
 
 const { generateInvoicePDF, generateInvoicePDFEnglish, generateInvoicePDFBulk } = require('../utils/pdf');
+const { slipUpload, UPLOADS_ROOT } = require('../utils/upload');
+
+function slipUrl(req, slip_path) {
+    if (!slip_path) return null;
+    return `${req.protocol}://${req.get('host')}/uploads/${slip_path}`;
+}
 
 // ---------- Helper: compute usage + cost ----------
 function computeBill(meter, settings, rentCost, otherCost = 0) {
@@ -56,7 +64,7 @@ router.get('/', authenticate, adminOnly, async (req, res) => {
             LEFT JOIN tenants t ON t.room_id = r.room_id AND t.is_active = TRUE
             LEFT JOIN expense_settings s ON s.apartment_id = r.apartment_id
             ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-            ORDER BY r.apartment_id, r.room_number
+            ORDER BY r.apartment_id, r.room_number::text COLLATE "C"
         `;
         const { rows } = await db.query(sql, params);
         return res.json({ data: rows });
@@ -296,19 +304,26 @@ router.get('/meter/:room_id', authenticate, adminOnly, async (req, res) => {
 
 // ---------- Tenant: list own bills ----------
 // Joined with expense_settings so the tenant page can derive payment status
-// (รอชำระ / ชำระแล้ว / เกินกำหนด) using the same client-side helper as admin.
+// and display payment info (bank details + QR URL).
 router.get('/tenant/me', authenticate, async (req, res) => {
     if (req.user.role !== 'tenant') return res.status(403).json({ error: 'Forbidden' });
     try {
         const { rows } = await db.query(`
             SELECT b.*, r.room_number,
-                   s.payment_due_day, s.late_fee_per_day
+                   s.payment_due_day, s.late_fee_per_day,
+                   s.bank_name, s.bank_account_number, s.bank_account_name,
+                   s.qr_code_path
             FROM bills b
             JOIN rooms r ON r.room_id = b.room_id
             LEFT JOIN expense_settings s ON s.apartment_id = r.apartment_id
             WHERE b.room_id = $1
             ORDER BY b.year DESC, b.month DESC
         `, [req.user.room_id]);
+        const base = `${req.protocol}://${req.get('host')}`;
+        rows.forEach((row) => {
+            row.qr_code_url       = row.qr_code_path       ? `${base}/uploads/${row.qr_code_path}`       : null;
+            row.payment_slip_url  = row.payment_slip_path  ? `${base}/uploads/${row.payment_slip_path}`  : null;
+        });
         return res.json({ data: rows });
     } catch (err) {
         console.error('[bills/tenant/me]', err);
@@ -609,5 +624,136 @@ router.post('/bulk-pdf', authenticate, adminOnly, async (req, res) => {
     }
 });
 
+
+// ---------- Tenant: submit payment slip ----------
+// POST /api/bills/:id/submit-slip  (tenant only, must own the bill)
+router.post('/:id/submit-slip', authenticate, (req, res, next) => {
+    if (req.user.role !== 'tenant') return res.status(403).json({ error: 'Forbidden' });
+    slipUpload.single('slip')(req, res, (err) => {
+        if (err) return res.status(400).json({ error: err.message });
+        next();
+    });
+}, async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'No image file uploaded' });
+    try {
+        const id = parseInt(req.params.id, 10);
+
+        // Verify ownership
+        const { rows: billRows } = await db.query(
+            'SELECT bill_id, room_id, payment_slip_path FROM bills WHERE bill_id = $1',
+            [id]
+        );
+        if (!billRows.length) return res.status(404).json({ error: 'Bill not found' });
+        if (billRows[0].room_id !== req.user.room_id) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        // Delete old slip file if one exists
+        if (billRows[0].payment_slip_path) {
+            const oldFile = path.join(UPLOADS_ROOT, billRows[0].payment_slip_path);
+            if (fs.existsSync(oldFile)) fs.unlinkSync(oldFile);
+        }
+
+        const filePath = `slips/${req.file.filename}`;
+        const { rows } = await db.query(
+            `UPDATE bills
+             SET payment_slip_path        = $1,
+                 payment_slip_uploaded_at = NOW(),
+                 payment_slip_status      = 'pending',
+                 updated_at               = NOW()
+             WHERE bill_id = $2
+             RETURNING bill_id, payment_slip_path, payment_slip_uploaded_at, payment_slip_status`,
+            [filePath, id]
+        );
+        const row = rows[0];
+        row.payment_slip_url = slipUrl(req, row.payment_slip_path);
+        return res.json({ data: row });
+    } catch (err) {
+        console.error('[bills/submit-slip]', err);
+        return res.status(500).json({ error: 'Failed to submit slip' });
+    }
+});
+
+// ---------- Admin: view slip (redirect to static file) ----------
+// GET /api/bills/:id/slip  (admin or tenant self)
+router.get('/:id/slip', authenticate, async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { rows } = await db.query(
+            'SELECT bill_id, room_id, payment_slip_path FROM bills WHERE bill_id = $1', [id]
+        );
+        if (!rows.length) return res.status(404).json({ error: 'Bill not found' });
+        if (req.user.role === 'tenant' && req.user.room_id !== rows[0].room_id) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+        if (!rows[0].payment_slip_path) return res.status(404).json({ error: 'No slip uploaded' });
+        return res.redirect(`/uploads/${rows[0].payment_slip_path}`);
+    } catch (err) {
+        console.error('[bills/slip]', err);
+        return res.status(500).json({ error: 'Failed' });
+    }
+});
+
+// ---------- Admin: confirm payment from slip ----------
+// POST /api/bills/:id/confirm-payment  (any admin role)
+router.post('/:id/confirm-payment', authenticate, adminOnly, async (req, res) => {
+    try {
+        const id   = parseInt(req.params.id, 10);
+        const when = req.body?.paid_at ? new Date(req.body.paid_at) : new Date();
+        if (Number.isNaN(when.getTime())) return res.status(400).json({ error: 'Invalid paid_at' });
+
+        const { rows } = await db.query(
+            `UPDATE bills
+             SET paid_at                  = $1,
+                 payment_slip_status      = 'confirmed',
+                 updated_at               = NOW()
+             WHERE bill_id = $2
+             RETURNING bill_id, room_id, paid_at, payment_slip_status`,
+            [when.toISOString(), id]
+        );
+        if (!rows.length) return res.status(404).json({ error: 'Bill not found' });
+        return res.json({ data: rows[0] });
+    } catch (err) {
+        console.error('[bills/confirm-payment]', err);
+        return res.status(500).json({ error: 'Failed to confirm payment' });
+    }
+});
+
+// ---------- Admin: reject slip ----------
+// POST /api/bills/:id/reject-slip  (any admin role)
+router.post('/:id/reject-slip', authenticate, adminOnly, async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { rows: billRows } = await db.query(
+            'SELECT bill_id, payment_slip_path FROM bills WHERE bill_id = $1', [id]
+        );
+        if (!billRows.length) return res.status(404).json({ error: 'Bill not found' });
+
+        // Remove the file
+        if (billRows[0].payment_slip_path) {
+            const file = path.join(UPLOADS_ROOT, billRows[0].payment_slip_path);
+            if (fs.existsSync(file)) fs.unlinkSync(file);
+        }
+
+        const { rows } = await db.query(
+            `UPDATE bills
+             SET payment_slip_path        = NULL,
+                 payment_slip_uploaded_at = NULL,
+                 payment_slip_status      = NULL,
+                 updated_at               = NOW()
+             WHERE bill_id = $1
+             RETURNING bill_id, payment_slip_status`,
+            [id]
+        );
+        return res.json({ data: rows[0] });
+    } catch (err) {
+        console.error('[bills/reject-slip]', err);
+        return res.status(500).json({ error: 'Failed to reject slip' });
+    }
+});
+
+// ---------- Admin: list bills enriched with slip info ----------
+// Extend the existing GET / to return slip fields (already in SELECT b.*)
+// No change needed — b.* includes payment_slip_path/status.
 
 module.exports = router;

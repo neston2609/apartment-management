@@ -30,6 +30,16 @@ api.interceptors.response.use(
 // Convenience: extract { data } envelope
 export const unwrap = (resPromise) => resPromise.then((r) => r.data?.data ?? r.data);
 
+// Build full URL for uploaded files (QR codes, slips).
+// In dev the CRA proxy forwards /uploads/* to the backend.
+// In production the URL is derived from REACT_APP_API_URL.
+export const getUploadUrl = (filePath) => {
+    if (!filePath) return null;
+    const apiUrl = process.env.REACT_APP_API_URL || '';
+    const base   = apiUrl ? apiUrl.replace(/\/api\/?$/, '') : '';
+    return `${base}/uploads/${filePath}`;
+};
+
 export default api;
 
 // Thai utility helpers used widely in pages

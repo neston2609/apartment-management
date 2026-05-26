@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear, defaultReportingMonth } from '../../utils/api';
+import api, { unwrap, fmtMoney, THAI_MONTHS, thaiYear, defaultReportingMonth, getUploadUrl } from '../../utils/api';
 import Spinner from '../../components/common/Spinner';
 import Badge from '../../components/common/Badge';
 import BillingImport from './BillingImport';
@@ -24,6 +24,9 @@ export default function Billing() {
     const [busyId, setBusyId]   = useState(null);
     const [bulkBusy, setBulkBusy] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
+
+    // Slip viewer modal
+    const [slipModal, setSlipModal] = useState(null); // { url, bill_id }
 
     const reload = () => {
         if (!aptId) return;
@@ -65,6 +68,29 @@ export default function Billing() {
         } finally { setBusyId(null); }
     };
 
+    const confirmPayment = async (bill) => {
+        setBusyId(bill.bill_id);
+        try {
+            await api.post(`/bills/${bill.bill_id}/confirm-payment`);
+            toast.success('ยืนยันการชำระแล้ว');
+            await reload();
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'ยืนยันล้มเหลว');
+        } finally { setBusyId(null); }
+    };
+
+    const rejectSlip = async (bill) => {
+        if (!window.confirm('ปฏิเสธสลิปนี้? ผู้เช่าจะต้องส่งสลิปใหม่')) return;
+        setBusyId(bill.bill_id);
+        try {
+            await api.post(`/bills/${bill.bill_id}/reject-slip`);
+            toast.success('ปฏิเสธสลิปแล้ว');
+            await reload();
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'ดำเนินการล้มเหลว');
+        } finally { setBusyId(null); }
+    };
+
     const bulkMarkPaid = async () => {
         if (!aptId) return;
         const aptName = apts.find((a) => String(a.apartment_id) === String(aptId))?.name || '';
@@ -90,7 +116,6 @@ export default function Billing() {
         } finally { setBulkBusy(false); }
     };
 
-    // Count how many bills are still unpaid for the current view
     const unpaidCount = bills.filter((b) => !b.paid_at).length;
 
     return (
@@ -138,6 +163,7 @@ export default function Billing() {
                                     <th className="text-left px-4 py-2">ห้อง</th>
                                     <th className="text-left px-4 py-2">ผู้เช่า</th>
                                     <th className="text-left px-4 py-2">สถานะ</th>
+                                    <th className="text-left px-4 py-2">สลิปการชำระ</th>
                                     <th className="text-right px-4 py-2">รวม</th>
                                     <th className="px-4 py-2"></th>
                                 </tr>
@@ -145,15 +171,17 @@ export default function Billing() {
                             <tbody>
                                 {rooms.map((r) => {
                                     const b = billByRoom[r.room_id];
-                                    // Payment status only applies to rooms with an active tenant.
-                                    // Non-occupied rooms (vacant / maintenance / common / caretaker)
-                                    // always show their room-type badge regardless of bill state.
                                     const isOccupied = r.status === 'occupied';
                                     const ps = isOccupied ? paymentStatus(b, now) : null;
                                     const hasBill = !!b;
                                     const total = hasBill ? Number(b.total_cost) : 0;
                                     const lateFee = ps?.kind === 'overdue' ? ps.late_fee : 0;
                                     const grand = total + lateFee;
+                                    const slipStatus = b?.payment_slip_status;
+                                    const slipPath   = b?.payment_slip_path;
+                                    const slipImgUrl = slipPath
+                                        ? (b.payment_slip_url || getUploadUrl(slipPath))
+                                        : null;
                                     return (
                                         <tr key={r.room_id} className="border-t border-slate-100 hover:bg-slate-50">
                                             <td className="px-4 py-2 font-medium">{r.room_number}</td>
@@ -174,6 +202,50 @@ export default function Billing() {
                                                     <Badge status={r.status} />
                                                 )}
                                             </td>
+                                            {/* Slip column */}
+                                            <td className="px-4 py-2">
+                                                {!hasBill ? (
+                                                    <span className="text-slate-300 text-xs">-</span>
+                                                ) : slipStatus === 'pending' ? (
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="inline-flex w-fit items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                                                            รอยืนยัน
+                                                        </span>
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {slipImgUrl && (
+                                                                <button onClick={() => setSlipModal({ url: slipImgUrl, bill_id: b.bill_id })}
+                                                                        className="text-[11px] text-brand-600 hover:underline">
+                                                                    ดูสลิป
+                                                                </button>
+                                                            )}
+                                                            <button onClick={() => confirmPayment(b)}
+                                                                    disabled={busyId === b.bill_id}
+                                                                    className="text-[11px] text-green-700 hover:underline disabled:opacity-50">
+                                                                ✓ ยืนยัน
+                                                            </button>
+                                                            <button onClick={() => rejectSlip(b)}
+                                                                    disabled={busyId === b.bill_id}
+                                                                    className="text-[11px] text-red-600 hover:underline disabled:opacity-50">
+                                                                ปฏิเสธ
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : slipStatus === 'confirmed' ? (
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="inline-flex w-fit items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                                            ยืนยันแล้ว
+                                                        </span>
+                                                        {slipImgUrl && (
+                                                            <button onClick={() => setSlipModal({ url: slipImgUrl, bill_id: b.bill_id })}
+                                                                    className="text-[11px] text-brand-600 hover:underline">
+                                                                ดูสลิป
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-slate-400">ยังไม่มีสลิป</span>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-2 text-right">
                                                 {hasBill ? (
                                                     <div className="flex flex-col items-end gap-0.5">
@@ -190,14 +262,12 @@ export default function Billing() {
                                             </td>
                                             <td className="px-4 py-2 text-right">
                                                 <div className="flex flex-col items-end gap-0.5 text-xs">
-                                                    {/* property_manager ไม่สามารถสร้าง/แก้ไขบิล */}
                                                     {!isPropertyManager && (
                                                         <Link to={`/admin/billing/${r.room_id}/${month}/${year}`}
                                                               className="text-brand-600 hover:underline">
                                                             {hasBill ? 'แก้ไข' : 'สร้าง'}
                                                         </Link>
                                                     )}
-                                                    {/* แต่กดเปลี่ยนสถานะบิลเป็นชำระแล้ว/ยกเลิกได้ทุก admin role */}
                                                     {hasBill && (
                                                         <button onClick={() => togglePaid(b)}
                                                                 disabled={busyId === b.bill_id}
@@ -215,7 +285,7 @@ export default function Billing() {
                                     );
                                 })}
                                 {rooms.length === 0 && (
-                                    <tr><td colSpan={5} className="px-4 py-6 text-center text-slate-400">ไม่มีห้องพัก</td></tr>
+                                    <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-400">ไม่มีห้องพัก</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -231,6 +301,29 @@ export default function Billing() {
                     onClose={() => setImportOpen(false)}
                     onDone={reload}
                 />
+            )}
+
+            {/* Slip viewer modal */}
+            {slipModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+                     onClick={() => setSlipModal(null)}>
+                    <div className="relative max-w-lg w-full mx-4 bg-white rounded-xl p-4 shadow-xl"
+                         onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="font-semibold text-slate-800">สลิปการชำระเงิน</h3>
+                            <button onClick={() => setSlipModal(null)}
+                                    className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+                        </div>
+                        <img src={slipModal.url} alt="สลิปการชำระเงิน"
+                             className="w-full max-h-[70vh] object-contain rounded-lg border border-slate-100" />
+                        <div className="flex justify-end mt-3">
+                            <a href={slipModal.url} target="_blank" rel="noreferrer"
+                               className="text-sm text-brand-600 hover:underline">
+                                เปิดในแท็บใหม่
+                            </a>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

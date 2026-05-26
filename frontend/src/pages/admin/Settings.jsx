@@ -1,10 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import api, { unwrap } from '../../utils/api';
+import api, { unwrap, getUploadUrl } from '../../utils/api';
 import Spinner from '../../components/common/Spinner';
 
-// Default rental contract terms (Thai) — used to pre-fill the textarea
-// when an apartment has not yet customised its terms.
 const DEFAULT_CONTRACT_TERMS = [
     '1. ผู้เช่าตกลงชำระค่าเช่าภายในวันที่ 5 ของทุกเดือน',
     '2. ผู้เช่าต้องรักษาทรัพย์สินภายในห้องพักให้อยู่ในสภาพดี',
@@ -19,10 +17,16 @@ const DEFAULT_CONTRACT_TERMS = [
 ].join('\n');
 
 export default function Settings() {
-    const [apts, setApts] = useState([]);
-    const [aptId, setAptId] = useState('');
-    const [form, setForm] = useState(null);
+    const [apts, setApts]     = useState([]);
+    const [aptId, setAptId]   = useState('');
+    const [form, setForm]     = useState(null);
     const [saving, setSaving] = useState(false);
+
+    // QR upload state
+    const [qrPreview, setQrPreview]     = useState(null);   // object URL for local preview
+    const [qrFile, setQrFile]           = useState(null);   // File object to upload
+    const [qrUploading, setQrUploading] = useState(false);
+    const qrInputRef = useRef(null);
 
     useEffect(() => {
         unwrap(api.get('/apartments')).then((r) => {
@@ -33,9 +37,9 @@ export default function Settings() {
 
     useEffect(() => {
         if (!aptId) return;
+        setQrPreview(null);
+        setQrFile(null);
         unwrap(api.get(`/settings/${aptId}`)).then((d) => {
-            // If the apartment has no custom contract terms yet, pre-fill the
-            // textarea with the default 10 rules so the admin can see/edit them.
             const next = { ...d };
             if (!next.contract_terms || !next.contract_terms.trim()) {
                 next.contract_terms = DEFAULT_CONTRACT_TERMS;
@@ -60,7 +64,52 @@ export default function Settings() {
         } finally { setSaving(false); }
     };
 
+    const handleQrFileChange = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setQrFile(file);
+        setQrPreview(URL.createObjectURL(file));
+    };
+
+    const uploadQr = async () => {
+        if (!qrFile || !aptId) return;
+        setQrUploading(true);
+        try {
+            const fd = new FormData();
+            fd.append('qr_code', qrFile);
+            const res = await api.post(`/settings/${aptId}/upload-qr`, fd, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            const updated = res.data?.data ?? res.data;
+            setForm((f) => ({ ...f, qr_code_path: updated.qr_code_path, qr_code_url: updated.qr_code_url }));
+            setQrFile(null);
+            setQrPreview(null);
+            if (qrInputRef.current) qrInputRef.current.value = '';
+            toast.success('อัปโหลด QR Code แล้ว');
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'อัปโหลด QR ล้มเหลว');
+        } finally { setQrUploading(false); }
+    };
+
+    const removeQr = async () => {
+        if (!aptId) return;
+        if (!window.confirm('ลบ QR Code ออก?')) return;
+        try {
+            await api.delete(`/settings/${aptId}/qr`);
+            setForm((f) => ({ ...f, qr_code_path: null, qr_code_url: null }));
+            setQrFile(null);
+            setQrPreview(null);
+            if (qrInputRef.current) qrInputRef.current.value = '';
+            toast.success('ลบ QR Code แล้ว');
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'ลบ QR ล้มเหลว');
+        }
+    };
+
     if (!form) return <div className="grid place-items-center h-64"><Spinner /></div>;
+
+    const savedQrUrl = form.qr_code_url || (form.qr_code_path ? getUploadUrl(form.qr_code_path) : null);
+    const displayQr  = qrPreview || savedQrUrl;
 
     return (
         <div className="max-w-3xl space-y-4">
@@ -90,6 +139,7 @@ export default function Settings() {
                            onChange={(v) => setForm({ ...form, electricity_max_units: parseInt(v, 10) || 0 })} />
                 </div>
 
+                {/* Payment & Late Fee */}
                 <div className="border-t border-slate-200 pt-3 mt-2">
                     <h3 className="text-sm font-semibold text-slate-700 mb-2">การชำระเงิน &amp; ค่าปรับ</h3>
                     <div className="grid grid-cols-2 gap-3">
@@ -112,6 +162,29 @@ export default function Settings() {
                                onChange={(v) => setForm({ ...form, late_fee_per_day: parseFloat(v) || 0 })} />
                     </div>
                 </div>
+
+                {/* Bank Transfer Info */}
+                <div className="border-t border-slate-200 pt-3 mt-2">
+                    <h3 className="text-sm font-semibold text-slate-700 mb-2">ข้อมูลการโอนเงิน</h3>
+                    <p className="text-xs text-slate-500 mb-2">
+                        ข้อมูลนี้จะแสดงให้ผู้เช่าเห็นเมื่อต้องการชำระเงิน
+                    </p>
+                    <div className="grid grid-cols-1 gap-3">
+                        <Field label="ชื่อธนาคาร"
+                               value={form.bank_name || ''}
+                               onChange={(v) => setForm({ ...form, bank_name: v })}
+                               placeholder="เช่น ธนาคารกสิกรไทย" />
+                        <Field label="เลขบัญชี"
+                               value={form.bank_account_number || ''}
+                               onChange={(v) => setForm({ ...form, bank_account_number: v })}
+                               placeholder="เช่น 123-4-56789-0" />
+                        <Field label="ชื่อบัญชี"
+                               value={form.bank_account_name || ''}
+                               onChange={(v) => setForm({ ...form, bank_account_name: v })}
+                               placeholder="เช่น นายสมชาย ใจดี" />
+                    </div>
+                </div>
+
                 <label className="block">
                     <span className="text-slate-600">ข้อความท้ายใบแจ้งหนี้</span>
                     <textarea rows={3} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
@@ -143,6 +216,51 @@ export default function Settings() {
                     </button>
                 </div>
             </form>
+
+            {/* QR Code Section — separate upload, not part of the main form */}
+            <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-3 text-sm">
+                <h3 className="text-sm font-semibold text-slate-700">QR Code สำหรับชำระเงิน</h3>
+                <p className="text-xs text-slate-500">อัปโหลดรูป QR Code พร้อมเพย์หรือ QR สำหรับโอนเงิน ผู้เช่าจะเห็นรูปนี้เมื่อกดชำระเงิน</p>
+
+                <div className="flex flex-wrap items-start gap-4">
+                    {displayQr && (
+                        <div className="relative">
+                            <img src={displayQr} alt="QR Code"
+                                 className="w-36 h-36 object-contain border border-slate-200 rounded-lg bg-white" />
+                            {qrPreview && (
+                                <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[10px] px-1 rounded">
+                                    ยังไม่ได้บันทึก
+                                </span>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="flex-1 space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                            <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-md text-slate-700 text-xs">
+                                เลือกรูป QR Code
+                                <input ref={qrInputRef} type="file" accept="image/*" className="hidden"
+                                       onChange={handleQrFileChange} />
+                            </label>
+                            {qrFile && (
+                                <button type="button" onClick={uploadQr} disabled={qrUploading}
+                                        className="bg-brand-600 hover:bg-brand-700 text-white text-xs px-3 py-1.5 rounded-md disabled:opacity-50">
+                                    {qrUploading ? 'กำลังอัปโหลด...' : 'บันทึก QR Code'}
+                                </button>
+                            )}
+                            {savedQrUrl && !qrFile && (
+                                <button type="button" onClick={removeQr}
+                                        className="bg-red-50 hover:bg-red-100 text-red-700 text-xs px-3 py-1.5 rounded-md">
+                                    ลบ QR Code
+                                </button>
+                            )}
+                        </div>
+                        {!displayQr && (
+                            <p className="text-xs text-slate-400">ยังไม่มี QR Code</p>
+                        )}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }
