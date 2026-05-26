@@ -17,13 +17,14 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          known_hosts: ${{ secrets.SERVER_KNOWN_HOST }}
+          fingerprint: ${{ secrets.SERVER_FINGERPRINT }}
           script: |
             set -e
             cd /app/apartment-management
 
             echo "=== [1/5] Pull latest code ==="
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
 
             echo "=== [2/5] Install backend dependencies ==="
             cd backend && npm install --omit=dev
