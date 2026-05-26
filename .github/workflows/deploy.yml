@@ -8,23 +8,61 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      - name: Deploy to server
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
+          known_hosts: ${{ secrets.SERVER_KNOWN_HOST }}
           script: |
+            set -e
             cd /app/apartment-management
+
+            echo "=== [1/5] Pull latest code ==="
             git pull origin main
 
-            # install deps
-            npm install
+            echo "=== [2/5] Install backend dependencies ==="
+            cd backend && npm install --omit=dev
+            cd ..
 
-            # build frontend
-            npm run build
+            echo "=== [3/5] Run database migrations ==="
+            node -e "
+              require('dotenv').config();
+              const { Pool } = require('pg');
+              const fs = require('fs');
+              const path = require('path');
+              const pool = new Pool({
+                host: process.env.DB_HOST,
+                port: process.env.DB_PORT || 5432,
+                user: process.env.DB_USER,
+                password: process.env.DB_PASSWORD,
+                database: process.env.DB_NAME,
+                ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+              });
+              const migrationsDir = path.join(__dirname, 'database', 'migrations');
+              const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
+              (async () => {
+                for (const file of files) {
+                  const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+                  await pool.query(sql);
+                  console.log('Applied:', file);
+                }
+                await pool.end();
+                console.log('All migrations done');
+              })().catch(e => { console.error(e.message); pool.end(); process.exit(1); });
+            "
 
-            # restart backend
+            echo "=== [4/5] Build frontend ==="
+            cd frontend && npm install --silent && npm run build
+            cd ..
+
+            echo "=== [5/5] Restart backend ==="
             pm2 restart apt-backend
+            sleep 2
+            pm2 show apt-backend | grep -E 'status|uptime'
+
+            echo "=== Deploy complete ==="
