@@ -301,7 +301,7 @@ function PaymentModal({ bill, slipFile, slipPreview, uploading, slipInputRef, on
                                 <div className="flex flex-col items-center gap-2">
                                     <p className="text-sm font-bold text-ink self-start">QR Code สำหรับชำระเงิน</p>
                                     <img src={qrUrl} alt="QR Code"
-                                         className="w-48 h-48 object-contain border border-[color:var(--border)] rounded-2xl bg-white p-1" />
+                                         className="w-full max-w-[320px] aspect-square object-contain border border-[color:var(--border)] rounded-2xl bg-white p-3 shadow-soft-sm" />
                                 </div>
                             )}
                         </div>
