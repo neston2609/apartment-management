@@ -38,11 +38,25 @@ const TENANT_LINKS = [
 ];
 
 function navLinkClass({ isActive }) {
-    return `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+    return `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
         isActive
-            ? 'bg-brand-600 text-white'
-            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            ? 'bg-grad-aurora text-white shadow-glow-violet'
+            : 'text-ink-2 hover:bg-cream-surface hover:text-ink'
     }`;
+}
+
+function BrandHeader() {
+    return (
+        <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-grad-aurora shadow-glow-violet">
+                <BuildingOffice2Icon className="h-5 w-5 text-white" />
+            </div>
+            <div>
+                <h1 className="font-display text-lg font-bold leading-tight text-ink">ระบบจัดการ</h1>
+                <p className="text-[11px] uppercase tracking-wider text-ink-3">อพาร์ทเมนต์</p>
+            </div>
+        </div>
+    );
 }
 
 export default function Sidebar({ tenantMode = false, mobileOpen = false, onClose }) {
@@ -73,13 +87,12 @@ export default function Sidebar({ tenantMode = false, mobileOpen = false, onClos
     return (
         <>
             {/* Desktop sidebar — md and up */}
-            <aside className="w-64 bg-slate-900 text-slate-100 hidden md:flex flex-col">
-                <div className="px-6 py-5 border-b border-slate-800">
-                    <h1 className="text-lg font-semibold leading-tight">ระบบจัดการ</h1>
-                    <p className="text-xs text-slate-400">อพาร์ทเมนต์</p>
+            <aside className="w-64 hidden md:flex flex-col bg-gradient-to-b from-white to-cream-surface border-r border-[color:var(--border)]">
+                <div className="px-5 py-5 border-b border-[color:var(--border)]">
+                    <BrandHeader />
                 </div>
                 <NavList />
-                <div className="p-4 text-xs text-slate-500 border-t border-slate-800">
+                <div className="p-4 text-xs text-ink-3 border-t border-[color:var(--border)]">
                     v1.0 © Apartment MS
                 </div>
             </aside>
@@ -87,21 +100,18 @@ export default function Sidebar({ tenantMode = false, mobileOpen = false, onClos
             {/* Mobile drawer — only renders below md */}
             {mobileOpen && (
                 <div className="md:hidden fixed inset-0 z-50 flex">
-                    <aside className="w-72 max-w-[80vw] bg-slate-900 text-slate-100 flex flex-col shadow-xl">
-                        <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
-                            <div>
-                                <h1 className="text-lg font-semibold leading-tight">ระบบจัดการ</h1>
-                                <p className="text-xs text-slate-400">อพาร์ทเมนต์</p>
-                            </div>
+                    <aside className="w-72 max-w-[80vw] flex flex-col shadow-xl bg-gradient-to-b from-white to-cream-surface border-r border-[color:var(--border)]">
+                        <div className="px-5 py-4 border-b border-[color:var(--border)] flex items-center justify-between">
+                            <BrandHeader />
                             <button onClick={onClose}
                                     aria-label="ปิดเมนู"
-                                    className="text-slate-300 hover:text-white p-1 rounded-md">
+                                    className="text-ink-3 hover:text-ink p-1 rounded-md">
                                 <XMarkIcon className="h-6 w-6" />
                             </button>
                         </div>
                         {/* Auto-close on tap-through */}
                         <NavList onNavigate={onClose} />
-                        <div className="p-4 text-xs text-slate-500 border-t border-slate-800">
+                        <div className="p-4 text-xs text-ink-3 border-t border-[color:var(--border)]">
                             v1.0 © Apartment MS
                         </div>
                     </aside>

@@ -530,7 +530,7 @@ All responses use the envelope `{ data: ... }` for success and `{ error: 'messag
 
 `POST /bulk-mark-paid` body: `{ apartment_id, month, year, paid_at? }`. **Idempotent**: marks every still-unpaid bill (`paid_at IS NULL`) for that apartment+month+year as paid; bills that were already paid are not touched (their original `paid_at` is preserved). Response: `{ marked_count, bills, paid_at }`.
 
-The bill upsert paths (`POST /` and `PUT /:id`) **do not touch `paid_at`** — editing/recalculating a bill never changes its payment state.
+The bill upsert paths (`POST /`, `PUT /:id`, and `/import`) **do not touch `paid_at` for occupied rooms** — editing/recalculating an occupied room's bill never changes its payment state. **Exception — non-occupied rooms** (`status !== 'occupied'`): because these rooms have no tenant, their bills are auto-marked paid on creation (`paid_at` set), and on re-save `paid_at` is backfilled only when still `NULL` (an existing `paid_at` is never cleared). This keeps vacant / maintenance / common / caretaker rooms from ever showing as outstanding.
 
 `POST /` and `PUT /:id` use the same `computeBill` helper in a single transaction:
 

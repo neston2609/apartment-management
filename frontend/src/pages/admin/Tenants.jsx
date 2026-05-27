@@ -64,10 +64,10 @@ export default function Tenants() {
             key: 'actions', title: '',
             render: (r) => (
                 <div className="flex gap-2 text-xs">
-                    <Link to={`/admin/tenants/${r.tenant_id}/edit`} className="text-brand-600 hover:underline">แก้ไข</Link>
-                    <button onClick={() => downloadContract(r)} className="text-slate-600 hover:underline">สัญญา</button>
+                    <Link to={`/admin/tenants/${r.tenant_id}/edit`} className="text-violet font-semibold hover:underline">แก้ไข</Link>
+                    <button onClick={() => downloadContract(r)} className="text-ink-2 font-semibold hover:underline">สัญญา</button>
                     {!isPropertyManager && (
-                        <button onClick={() => handleMoveOut(r)} className="text-red-600 hover:underline">ย้ายออก</button>
+                        <button onClick={() => handleMoveOut(r)} className="text-[#dc2626] font-semibold hover:underline">ย้ายออก</button>
                     )}
                 </div>
             ),
@@ -77,18 +77,17 @@ export default function Tenants() {
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-slate-800">ผู้เช่า</h1>
+                <h1 className="font-display text-3xl font-bold text-ink">ผู้เช่า</h1>
                 {!isPropertyManager && (
-                    <Link to="/admin/tenants/new"
-                          className="bg-brand-600 hover:bg-brand-700 text-white text-sm px-3 py-2 rounded-md">
+                    <Link to="/admin/tenants/new" className="btn btn-primary">
                         เพิ่มผู้เช่า
                     </Link>
                 )}
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-lg p-3">
-                <label className="text-sm text-slate-600 mr-2">อพาร์ทเมนต์:</label>
-                <select className="border border-slate-300 rounded-md px-2 py-1 text-sm"
+            <div className="ui-card p-3.5">
+                <label className="text-sm text-ink-2 font-medium mr-2">อพาร์ทเมนต์:</label>
+                <select className="ui-input !py-2 !w-auto inline-block"
                         value={filter} onChange={(e) => setFilter(e.target.value)}>
                     <option value="">ทั้งหมด</option>
                     {apts.map((a) => <option key={a.apartment_id} value={a.apartment_id}>{a.name}</option>)}

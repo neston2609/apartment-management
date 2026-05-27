@@ -5,8 +5,8 @@ import Spinner from '../../components/common/Spinner';
 
 const KIND_LABEL = { admin: 'แอดมิน', tenant: 'ผู้เช่า' };
 const KIND_BADGE = {
-    admin:  'bg-blue-100 text-blue-800',
-    tenant: 'bg-amber-100 text-amber-800',
+    admin:  'bg-cyan-soft text-[#0e7490]',
+    tenant: 'bg-orange-soft text-[#b45309]',
 };
 const REASON_LABEL = {
     unknown_user:   'ไม่พบผู้ใช้',
@@ -58,26 +58,26 @@ export default function LoginLogs() {
     return (
         <div className="space-y-4">
             <div>
-                <h1 className="text-2xl font-bold text-slate-800">ประวัติการเข้าสู่ระบบ</h1>
-                <p className="text-sm text-slate-500">บันทึกการเข้าสู่ระบบทั้งหมด (ทั้งสำเร็จและไม่สำเร็จ)</p>
+                <h1 className="font-display text-3xl font-bold text-ink">ประวัติการเข้าสู่ระบบ</h1>
+                <p className="text-sm text-ink-3">บันทึกการเข้าสู่ระบบทั้งหมด (ทั้งสำเร็จและไม่สำเร็จ)</p>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-3 text-sm">
-                <label className="text-slate-600">ประเภทผู้ใช้:</label>
-                <select className="border border-slate-300 rounded-md px-2 py-1"
+            <div className="ui-card p-3.5 flex flex-wrap items-center gap-3 text-sm">
+                <label className="text-ink-2 font-medium">ประเภทผู้ใช้:</label>
+                <select className="ui-input !py-2 !w-auto"
                         value={filterKind} onChange={(e) => setFilterKind(e.target.value)}>
                     <option value="">ทั้งหมด</option>
                     <option value="admin">แอดมิน</option>
                     <option value="tenant">ผู้เช่า</option>
                 </select>
-                <label className="text-slate-600 ml-2">ผลลัพธ์:</label>
-                <select className="border border-slate-300 rounded-md px-2 py-1"
+                <label className="text-ink-2 font-medium ml-2">ผลลัพธ์:</label>
+                <select className="ui-input !py-2 !w-auto"
                         value={filterSuccess} onChange={(e) => setFilterSuccess(e.target.value)}>
                     <option value="">ทั้งหมด</option>
                     <option value="true">สำเร็จ</option>
                     <option value="false">ไม่สำเร็จ</option>
                 </select>
-                <span className="ml-auto text-slate-500">
+                <span className="ml-auto text-ink-3">
                     {total > 0
                         ? `${offset + 1}–${last} จาก ${total.toLocaleString()}`
                         : 'ไม่พบรายการ'}
@@ -87,21 +87,21 @@ export default function LoginLogs() {
             {loading
                 ? <div className="grid place-items-center h-32"><Spinner /></div>
                 : (
-                    <div className="overflow-x-auto bg-white rounded-lg border border-slate-200">
+                    <div className="overflow-x-auto ui-card">
                         <table className="min-w-full text-sm">
-                            <thead className="bg-slate-50 text-slate-600">
-                                <tr>
-                                    <th className="text-left px-4 py-2">เวลา</th>
-                                    <th className="text-left px-4 py-2">ผลลัพธ์</th>
-                                    <th className="text-left px-4 py-2">ประเภท</th>
-                                    <th className="text-left px-4 py-2">ชื่อผู้ใช้/เลขบัตร</th>
-                                    <th className="text-left px-4 py-2">รายละเอียด</th>
-                                    <th className="text-left px-4 py-2">IP</th>
+                            <thead className="bg-cream-2 text-ink-3">
+                                <tr className="[&>th]:text-[11px] [&>th]:font-bold [&>th]:uppercase [&>th]:tracking-wider [&>th]:px-4 [&>th]:py-3.5 [&>th]:border-b [&>th]:border-[color:var(--border)] [&>th]:text-left">
+                                    <th>เวลา</th>
+                                    <th>ผลลัพธ์</th>
+                                    <th>ประเภท</th>
+                                    <th>ชื่อผู้ใช้/เลขบัตร</th>
+                                    <th>รายละเอียด</th>
+                                    <th>IP</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {logs.map((l) => (
-                                    <tr key={l.log_id} className="border-t border-slate-100 hover:bg-slate-50">
+                                    <tr key={l.log_id} className="border-t border-[color:var(--border)] hover:bg-cream-surface text-ink-2">
                                         <td className="px-4 py-2 whitespace-nowrap">{fmtThaiDateTime(l.created_at)}</td>
                                         <td className="px-4 py-2">
                                             {l.success
@@ -114,25 +114,25 @@ export default function LoginLogs() {
                                                     {KIND_LABEL[l.user_kind] || l.user_kind}
                                                 </span>
                                             ) : (
-                                                <span className="text-slate-400 text-xs">ไม่ระบุ</span>
+                                                <span className="text-ink-4 text-xs">ไม่ระบุ</span>
                                             )}
                                         </td>
                                         <td className="px-4 py-2">
                                             <div className="font-medium">{l.identifier || '-'}</div>
                                             {l.user_name && (
-                                                <div className="text-xs text-slate-500">{l.user_name}{l.user_room ? ` · ห้อง ${l.user_room}` : ''}</div>
+                                                <div className="text-xs text-ink-3">{l.user_name}{l.user_room ? ` · ห้อง ${l.user_room}` : ''}</div>
                                             )}
                                         </td>
-                                        <td className="px-4 py-2 text-xs text-slate-600">
+                                        <td className="px-4 py-2 text-xs text-ink-2">
                                             {l.success
-                                                ? <span className="text-green-700">เข้าสู่ระบบสำเร็จ</span>
-                                                : <span className="text-red-700">{REASON_LABEL[l.error_reason] || l.error_reason || 'ไม่สำเร็จ'}</span>}
+                                                ? <span className="text-[#047857]">เข้าสู่ระบบสำเร็จ</span>
+                                                : <span className="text-[#b91c1c]">{REASON_LABEL[l.error_reason] || l.error_reason || 'ไม่สำเร็จ'}</span>}
                                         </td>
                                         <td className="px-4 py-2 text-xs text-slate-500">{l.ip || '-'}</td>
                                     </tr>
                                 ))}
                                 {logs.length === 0 && (
-                                    <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-400">ไม่มีข้อมูล</td></tr>
+                                    <tr><td colSpan={6} className="px-4 py-8 text-center text-ink-4">ไม่มีข้อมูล</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -144,12 +144,12 @@ export default function LoginLogs() {
             <div className="flex items-center justify-end gap-2 text-sm">
                 <button onClick={() => load(Math.max(0, offset - PAGE_SIZE))}
                         disabled={offset === 0 || loading}
-                        className="px-3 py-1.5 rounded-md border border-slate-300 disabled:opacity-50">
+                        className="btn btn-ghost">
                     ← ก่อนหน้า
                 </button>
                 <button onClick={() => load(offset + PAGE_SIZE)}
                         disabled={offset + PAGE_SIZE >= total || loading}
-                        className="px-3 py-1.5 rounded-md border border-slate-300 disabled:opacity-50">
+                        className="btn btn-ghost">
                     ถัดไป →
                 </button>
             </div>

@@ -74,34 +74,33 @@ export default function Invoice() {
 
     return (
         <div className="space-y-4">
-            <h1 className="text-2xl font-bold text-slate-800">พิมพ์ใบแจ้งหนี้</h1>
+            <h1 className="font-display text-3xl font-bold text-ink">พิมพ์ใบแจ้งหนี้</h1>
 
-            <div className="bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap gap-3 items-center text-sm">
+            <div className="ui-card p-3.5 flex flex-wrap gap-3 items-center text-sm">
                 <select value={aptId} onChange={(e) => setAptId(e.target.value)}
-                        className="border border-slate-300 rounded-md px-2 py-1">
+                        className="ui-input !py-2 !w-auto">
                     {apts.map((a) => <option key={a.apartment_id} value={a.apartment_id}>{a.name}</option>)}
                 </select>
                 <select value={month} onChange={(e) => setMonth(parseInt(e.target.value, 10))}
-                        className="border border-slate-300 rounded-md px-2 py-1">
+                        className="ui-input !py-2 !w-auto">
                     {THAI_MONTHS.map((n, i) => <option key={i + 1} value={i + 1}>{n}</option>)}
                 </select>
                 <input type="number" value={year} onChange={(e) => setYear(parseInt(e.target.value, 10))}
-                       className="border border-slate-300 rounded-md px-2 py-1 w-24" />
-                <span className="text-slate-500">พ.ศ. {thaiYear(year)}</span>
+                       className="ui-input !py-2 w-24" />
+                <span className="text-ink-3 font-mono">พ.ศ. {thaiYear(year)}</span>
                 <select value={size} onChange={(e) => setSize(e.target.value)}
-                        className="border border-slate-300 rounded-md px-2 py-1">
+                        className="ui-input !py-2 !w-auto">
                     <option value="A5">A5 (ค่าเริ่มต้น)</option>
                     <option value="A4">A4</option>
                 </select>
-                <span className="text-xs text-slate-500">ภาษาไทย · แนวตั้ง</span>
-                <button onClick={downloadAll}
-                        className="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-md ml-auto">
+                <span className="text-xs text-ink-3">ภาษาไทย · แนวตั้ง</span>
+                <button onClick={downloadAll} className="btn btn-primary ml-auto">
                     ดาวน์โหลดทั้งหมด
                 </button>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap gap-3 text-sm">
-                <span className="text-slate-600">สถานะที่รวม:</span>
+            <div className="ui-card p-3.5 flex flex-wrap gap-3 text-sm items-center">
+                <span className="text-ink-2 font-medium">สถานะที่รวม:</span>
                 {ALL_STATUSES.map((s) => (
                     <label key={s} className="inline-flex items-center gap-1">
                         <input type="checkbox" checked={statuses.includes(s)} onChange={() => toggleStatus(s)} />
@@ -113,28 +112,28 @@ export default function Invoice() {
             {loading
                 ? <div className="grid place-items-center h-32"><Spinner /></div>
                 : (
-                    <div className="overflow-x-auto bg-white rounded-lg border border-slate-200">
+                    <div className="overflow-x-auto ui-card">
                         <table className="min-w-full text-sm">
-                            <thead className="bg-slate-50 text-slate-600">
-                                <tr>
-                                    <th className="text-left px-4 py-2">ห้อง</th>
-                                    <th className="text-left px-4 py-2">ผู้เช่า</th>
-                                    <th className="text-right px-4 py-2">รวม</th>
-                                    <th className="px-4 py-2"></th>
+                            <thead className="bg-cream-2 text-ink-3">
+                                <tr className="[&>th]:text-[11px] [&>th]:font-bold [&>th]:uppercase [&>th]:tracking-wider [&>th]:px-4 [&>th]:py-3.5 [&>th]:border-b [&>th]:border-[color:var(--border)]">
+                                    <th className="text-left">ห้อง</th>
+                                    <th className="text-left">ผู้เช่า</th>
+                                    <th className="!text-right">รวม</th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {bills.map((r) => (
-                                    <tr key={r.room_id} className="border-t border-slate-100">
-                                        <td className="px-4 py-2 font-medium">{r.room_number}</td>
-                                        <td className="px-4 py-2">{r.tenant_name || '-'}</td>
-                                        <td className="px-4 py-2 text-right">
-                                            {r.bill ? `฿ ${fmtMoney(r.bill.total_cost)}` : <span className="text-slate-400">ยังไม่ได้สร้าง</span>}
+                                    <tr key={r.room_id} className="border-t border-[color:var(--border)] text-ink-2 hover:bg-cream-surface">
+                                        <td className="px-4 py-3 font-display font-bold text-ink">{r.room_number}</td>
+                                        <td className="px-4 py-3">{r.tenant_name || '-'}</td>
+                                        <td className="px-4 py-3 text-right font-mono">
+                                            {r.bill ? `฿ ${fmtMoney(r.bill.total_cost)}` : <span className="text-ink-4">ยังไม่ได้สร้าง</span>}
                                         </td>
-                                        <td className="px-4 py-2 text-right">
+                                        <td className="px-4 py-3 text-right">
                                             {r.bill && (
                                                 <button onClick={() => downloadOne(r.bill.bill_id)}
-                                                        className="text-brand-600 hover:underline text-xs">
+                                                        className="text-violet font-semibold hover:underline text-xs">
                                                     ดาวน์โหลด PDF
                                                 </button>
                                             )}
@@ -142,7 +141,7 @@ export default function Invoice() {
                                     </tr>
                                 ))}
                                 {bills.length === 0 && (
-                                    <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-400">ไม่มีห้องตามตัวกรอง</td></tr>
+                                    <tr><td colSpan={4} className="px-4 py-8 text-center text-ink-4">ไม่มีห้องตามตัวกรอง</td></tr>
                                 )}
                             </tbody>
                         </table>

@@ -60,11 +60,11 @@ export default function SystemSettings() {
     return (
         <div className="max-w-2xl space-y-4">
             <div>
-                <h1 className="text-2xl font-bold text-slate-800">ตั้งค่าระบบ</h1>
-                <p className="text-sm text-slate-500">การตั้งค่า SMTP สำหรับส่งอีเมลรีเซ็ตรหัสผ่าน</p>
+                <h1 className="font-display text-3xl font-bold text-ink">ตั้งค่าระบบ</h1>
+                <p className="text-sm text-ink-3">การตั้งค่า SMTP สำหรับส่งอีเมลรีเซ็ตรหัสผ่าน</p>
             </div>
 
-            <details className="bg-amber-50 border border-amber-200 rounded-md p-4 text-sm text-amber-900">
+            <details className="bg-sunshine-soft border border-sunshine/40 rounded-2xl p-4 text-sm text-[#92400e]">
                 <summary className="font-medium cursor-pointer">
                     วิธีตั้งค่า Gmail App Password
                 </summary>
@@ -77,37 +77,35 @@ export default function SystemSettings() {
                 </ol>
             </details>
 
-            <form onSubmit={save} className="bg-white border border-slate-200 rounded-lg p-5 space-y-3 text-sm">
+            <form onSubmit={save} className="ui-card p-5 space-y-3 text-sm">
                 {KEYS.map((k) => (
                     <label key={k.key} className="block">
-                        <span className="text-slate-600">{k.label}</span>
+                        <span className="text-ink-2 font-semibold">{k.label}</span>
                         <input
                             type={k.type || 'text'}
                             placeholder={k.placeholder || ''}
-                            className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                            className="ui-input mt-1 !py-2"
                             value={form[k.key] ?? ''}
                             onChange={(e) => setForm({ ...form, [k.key]: e.target.value })}
                         />
-                        {k.hint && <span className="text-xs text-slate-500 mt-0.5 block">{k.hint}</span>}
+                        {k.hint && <span className="text-xs text-ink-3 mt-0.5 block">{k.hint}</span>}
                     </label>
                 ))}
                 <div className="flex justify-end">
-                    <button type="submit" disabled={saving}
-                            className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md disabled:opacity-50">
+                    <button type="submit" disabled={saving} className="btn btn-primary">
                         {saving ? 'กำลังบันทึก...' : 'บันทึก'}
                     </button>
                 </div>
             </form>
 
-            <div className="bg-white border border-slate-200 rounded-lg p-5 text-sm">
-                <h2 className="font-semibold text-slate-700">ทดสอบส่งอีเมล</h2>
-                <p className="text-xs text-slate-500 mt-1">บันทึกการตั้งค่าก่อนแล้วทดสอบส่งอีเมลไปยังที่อยู่ใด ๆ</p>
+            <div className="ui-card p-5 text-sm">
+                <h2 className="font-display font-bold text-ink">ทดสอบส่งอีเมล</h2>
+                <p className="text-xs text-ink-3 mt-1">บันทึกการตั้งค่าก่อนแล้วทดสอบส่งอีเมลไปยังที่อยู่ใด ๆ</p>
                 <div className="flex gap-2 mt-3">
                     <input type="email" placeholder="recipient@example.com"
-                           className="flex-1 rounded-md border border-slate-300 px-2 py-1.5"
+                           className="ui-input !py-2 flex-1"
                            value={testTo} onChange={(e) => setTestTo(e.target.value)} />
-                    <button onClick={sendTest} disabled={testing}
-                            className="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-md disabled:opacity-50">
+                    <button onClick={sendTest} disabled={testing} className="btn btn-ghost">
                         {testing ? 'กำลังส่ง...' : 'ส่งทดสอบ'}
                     </button>
                 </div>

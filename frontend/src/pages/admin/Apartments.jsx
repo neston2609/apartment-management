@@ -101,15 +101,15 @@ export default function Apartments() {
             key: 'actions', title: '',
             render: (r) => (
                 <div className="flex gap-3">
-                    <Link to={`/admin/rooms/${r.apartment_id}`} className="text-brand-600 hover:underline text-xs">
+                    <Link to={`/admin/rooms/${r.apartment_id}`} className="text-violet font-semibold hover:underline text-xs">
                         ห้องพัก / ตั้งราคา
                     </Link>
                     {!isPropertyManager && (
                         <>
-                            <button onClick={() => startEdit(r)} className="text-slate-600 hover:underline text-xs">
+                            <button onClick={() => startEdit(r)} className="text-ink-2 font-semibold hover:underline text-xs">
                                 แก้ไข
                             </button>
-                            <button onClick={() => startDelete(r)} className="text-red-600 hover:underline text-xs">
+                            <button onClick={() => startDelete(r)} className="text-[#dc2626] font-semibold hover:underline text-xs">
                                 ลบ
                             </button>
                         </>
@@ -124,9 +124,9 @@ export default function Apartments() {
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-slate-800">อพาร์ทเมนต์</h1>
+                <h1 className="font-display text-3xl font-bold text-ink">อพาร์ทเมนต์</h1>
                 {!isPropertyManager && (
-                    <button onClick={startCreate} className="bg-brand-600 hover:bg-brand-700 text-white text-sm px-3 py-2 rounded-md">
+                    <button onClick={startCreate} className="btn btn-primary">
                         เพิ่มอพาร์ทเมนต์
                     </button>
                 )}
@@ -139,9 +139,8 @@ export default function Apartments() {
                 onClose={() => setOpen(false)}
                 footer={
                     <>
-                        <button onClick={() => setOpen(false)} className="px-3 py-1.5 text-sm text-slate-600">ยกเลิก</button>
-                        <button onClick={submit} disabled={saving}
-                                className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md disabled:opacity-50">
+                        <button onClick={() => setOpen(false)} className="btn btn-ghost">ยกเลิก</button>
+                        <button onClick={submit} disabled={saving} className="btn btn-primary">
                             {saving ? 'กำลังบันทึก...' : 'บันทึก'}
                         </button>
                     </>
@@ -165,12 +164,12 @@ export default function Apartments() {
                         )}
                     </div>
                     {!editing && (
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-ink-3">
                             * ราคาเริ่มต้นจะถูกใช้กับทุกห้องที่สร้างขึ้น สามารถปรับ "ราคาแยกรายห้อง" ได้ในหน้า "ห้องพัก / ตั้งราคา"
                         </p>
                     )}
                     {editing && (
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-ink-3">
                             * การแก้ไขข้อมูลพื้นฐานจะไม่สร้างห้องพักใหม่อัตโนมัติ
                         </p>
                     )}
@@ -183,11 +182,11 @@ export default function Apartments() {
                 onClose={() => setDeleting(null)}
                 footer={
                     <>
-                        <button onClick={() => setDeleting(null)} className="px-3 py-1.5 text-sm text-slate-600">
+                        <button onClick={() => setDeleting(null)} className="btn btn-ghost">
                             ยกเลิก
                         </button>
                         <button onClick={confirmDelete} disabled={delBusy || !preview}
-                                className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md disabled:opacity-50">
+                                className="btn bg-red-600 text-white">
                             {delBusy ? 'กำลังลบ...' : 'ยืนยันลบถาวร'}
                         </button>
                     </>
@@ -198,19 +197,19 @@ export default function Apartments() {
                         การกระทำนี้ <strong>ลบถาวร</strong> และไม่สามารถย้อนกลับได้
                     </div>
                     {preview ? (
-                        <div className="text-slate-700">
+                        <div className="text-ink-2">
                             <p>การลบอพาร์ทเมนต์นี้จะลบข้อมูลที่เกี่ยวข้องทั้งหมด:</p>
                             <ul className="list-disc pl-5 mt-2 space-y-1">
                                 <li>ห้องพัก: <strong>{preview.rooms}</strong> ห้อง</li>
                                 <li>ใบแจ้งหนี้: <strong>{preview.bills}</strong> รายการ</li>
                                 <li>มิเตอร์: <strong>{preview.meter_readings}</strong> รายการ</li>
                                 <li>ผู้เช่ายังพักอยู่: <strong>{preview.active_tenants}</strong> คน
-                                    <span className="text-slate-500"> (จะถูกบันทึกย้ายออกอัตโนมัติ)</span>
+                                    <span className="text-ink-3"> (จะถูกบันทึกย้ายออกอัตโนมัติ)</span>
                                 </li>
                             </ul>
                         </div>
                     ) : (
-                        <div className="text-slate-500">กำลังโหลดข้อมูล...</div>
+                        <div className="text-ink-3">กำลังโหลดข้อมูล...</div>
                     )}
                 </div>
             </Modal>
@@ -221,18 +220,18 @@ export default function Apartments() {
 function Field({ label, value, onChange, type = 'text', textarea, ...rest }) {
     return (
         <label className="block">
-            <span className="text-slate-600">{label}</span>
+            <span className="text-ink-2 font-semibold">{label}</span>
             {textarea ? (
                 <textarea
                     rows={2}
-                    className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                    className="ui-input mt-1 !py-2"
                     value={value} onChange={(e) => onChange(e.target.value)}
                     {...rest}
                 />
             ) : (
                 <input
                     type={type}
-                    className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                    className="ui-input mt-1 !py-2"
                     value={value} onChange={(e) => onChange(e.target.value)}
                     {...rest}
                 />

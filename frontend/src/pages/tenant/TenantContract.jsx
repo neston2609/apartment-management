@@ -20,20 +20,19 @@ export default function TenantContract() {
 
     return (
         <div className="max-w-xl space-y-4">
-            <h1 className="text-2xl font-bold text-slate-800">สัญญาเช่า</h1>
+            <h1 className="font-display text-3xl font-bold text-ink">สัญญาเช่า</h1>
 
-            <div className="bg-white border border-slate-200 rounded-lg p-6 text-sm space-y-3">
-                <p className="text-slate-600">
+            <div className="ui-card p-6 text-sm space-y-3">
+                <p className="text-ink-2">
                     คุณสามารถดาวน์โหลดสัญญาเช่าฉบับเต็มได้ที่นี่
                     เอกสารจะแสดงรายละเอียดผู้เช่า ห้องพัก ค่าเช่า และเงื่อนไขทั้งหมด
                 </p>
-                <div className="text-slate-700">
-                    <p><span className="text-slate-500">ชื่อ:</span> {user?.full_name}</p>
-                    <p><span className="text-slate-500">ห้อง:</span> {user?.room_number}</p>
-                    <p><span className="text-slate-500">เลขบัตรประชาชน:</span> {user?.national_id}</p>
+                <div className="text-ink-2 space-y-1">
+                    <p><span className="text-ink-3">ชื่อ:</span> {user?.full_name}</p>
+                    <p><span className="text-ink-3">ห้อง:</span> {user?.room_number}</p>
+                    <p><span className="text-ink-3">เลขบัตรประชาชน:</span> {user?.national_id}</p>
                 </div>
-                <button onClick={download} disabled={loading}
-                        className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-md disabled:opacity-50">
+                <button onClick={download} disabled={loading} className="btn btn-primary">
                     {loading ? 'กำลังสร้าง...' : 'ดาวน์โหลดสัญญา PDF'}
                 </button>
             </div>

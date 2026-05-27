@@ -1,10 +1,10 @@
 const STYLES = {
-    occupied:    'bg-green-100 text-green-800',
-    vacant:      'bg-slate-100 text-slate-700',
-    maintenance: 'bg-yellow-100 text-yellow-800',
-    common:      'bg-blue-100 text-blue-800',
-    caretaker:   'bg-purple-100 text-purple-800',
-    default:     'bg-slate-100 text-slate-700',
+    occupied:    'bg-cyan-soft text-[#0e7490]',
+    vacant:      'bg-cream-2 text-ink-2',
+    maintenance: 'bg-orange-soft text-[#b45309]',
+    common:      'bg-mint-soft text-[#0f766e]',
+    caretaker:   'bg-violet-soft text-[#6d28d9]',
+    default:     'bg-cream-2 text-ink-2',
 };
 const LABELS = {
     occupied: 'มีผู้เช่า', vacant: 'ว่าง', maintenance: 'ซ่อมบำรุง',
@@ -14,7 +14,7 @@ const LABELS = {
 export default function Badge({ status, children }) {
     const cls = STYLES[status] || STYLES.default;
     return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cls}`}>
+        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${cls}`}>
             {children || LABELS[status] || status}
         </span>
     );

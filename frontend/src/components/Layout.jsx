@@ -9,7 +9,7 @@ export default function Layout({ tenantMode = false }) {
     const [mobileOpen, setMobileOpen] = useState(false);
 
     return (
-        <div className="min-h-screen flex bg-slate-50">
+        <div className="min-h-screen flex app-bg">
             <Sidebar
                 tenantMode={tenantMode}
                 mobileOpen={mobileOpen}

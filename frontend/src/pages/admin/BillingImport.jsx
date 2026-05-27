@@ -102,10 +102,9 @@ export default function BillingImport({ apartmentId, defaultMonth, defaultYear, 
             title="นำเข้าใบแจ้งหนี้จาก Excel"
             footer={
                 <>
-                    <button onClick={close} className="px-3 py-1.5 text-sm text-slate-600">ปิด</button>
+                    <button onClick={close} className="btn btn-ghost">ปิด</button>
                     {!report && (
-                        <button onClick={submit} disabled={busy || !rows.length}
-                                className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md disabled:opacity-50">
+                        <button onClick={submit} disabled={busy || !rows.length} className="btn btn-primary">
                             {busy ? 'กำลังนำเข้า...' : `นำเข้า ${rows.length} แถว`}
                         </button>
                     )}
@@ -116,23 +115,23 @@ export default function BillingImport({ apartmentId, defaultMonth, defaultYear, 
                 {/* Step 1: Period and column mapping */}
                 <div className="grid grid-cols-2 gap-3">
                     <label className="block">
-                        <span className="text-slate-600">เดือน</span>
-                        <select className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                        <span className="text-ink-2 font-semibold">เดือน</span>
+                        <select className="ui-input mt-1 !py-2"
                                 value={month} onChange={(e) => setMonth(parseInt(e.target.value, 10))}>
                             {THAI_MONTHS.map((n, i) => <option key={i + 1} value={i + 1}>{n}</option>)}
                         </select>
                     </label>
                     <label className="block">
-                        <span className="text-slate-600">ปี (ค.ศ.)</span>
-                        <select className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                        <span className="text-ink-2 font-semibold">ปี (ค.ศ.)</span>
+                        <select className="ui-input mt-1 !py-2"
                                 value={year} onChange={(e) => setYear(parseInt(e.target.value, 10))}>
                             {yearOptions.map((y) => <option key={y} value={y}>{thaiYear(y)} ({y})</option>)}
                         </select>
                     </label>
                 </div>
 
-                <details className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs">
-                    <summary className="cursor-pointer font-medium text-slate-700">
+                <details className="bg-cream-surface border border-[color:var(--border)] rounded-xl p-3 text-xs">
+                    <summary className="cursor-pointer font-bold text-ink">
                         ตั้งค่าคอลัมน์ (ค่าเริ่มต้น: เลขห้อง=2, น้ำ=3, ไฟ=4)
                     </summary>
                     <div className="grid grid-cols-2 gap-2 mt-2">
@@ -141,7 +140,7 @@ export default function BillingImport({ apartmentId, defaultMonth, defaultYear, 
                         <NumField label="คอลัมน์ ไฟใหม่"  value={colElec}  onChange={setColElec} />
                         <NumField label="แถวเริ่มข้อมูล"   value={dataStartRow} onChange={setDataStartRow} />
                     </div>
-                    <p className="text-slate-500 mt-2">
+                    <p className="text-ink-3 mt-2">
                         * ใช้เลขคอลัมน์แบบ 1, 2, 3 ... (A=1, B=2, ...)
                     </p>
                 </details>
@@ -149,13 +148,13 @@ export default function BillingImport({ apartmentId, defaultMonth, defaultYear, 
                 {/* Step 2: file picker */}
                 <div>
                     <label className="block">
-                        <span className="text-slate-600">เลือกไฟล์ .xlsx</span>
+                        <span className="text-ink-2 font-semibold">เลือกไฟล์ .xlsx</span>
                         <input type="file" accept=".xlsx,.xls"
                                onChange={handleFile}
                                className="mt-1 w-full text-sm" />
                     </label>
                     {fileName && (
-                        <p className="text-xs text-slate-500 mt-1">
+                        <p className="text-xs text-ink-3 mt-1">
                             ไฟล์: <strong>{fileName}</strong> · พบ {rows.length} แถวที่ใช้ได้
                         </p>
                     )}
@@ -163,9 +162,9 @@ export default function BillingImport({ apartmentId, defaultMonth, defaultYear, 
 
                 {/* Step 3: preview */}
                 {rows.length > 0 && !report && (
-                    <div className="overflow-x-auto bg-white rounded-md border border-slate-200 max-h-72">
+                    <div className="overflow-x-auto bg-white rounded-xl border border-[color:var(--border)] max-h-72">
                         <table className="min-w-full text-xs">
-                            <thead className="bg-slate-50 text-slate-600 sticky top-0">
+                            <thead className="bg-cream-2 text-ink-3 sticky top-0">
                                 <tr>
                                     <th className="text-left px-3 py-1.5">เลขห้อง</th>
                                     <th className="text-right px-3 py-1.5">น้ำใหม่</th>
@@ -174,14 +173,14 @@ export default function BillingImport({ apartmentId, defaultMonth, defaultYear, 
                             </thead>
                             <tbody>
                                 {rows.slice(0, 100).map((r, i) => (
-                                    <tr key={i} className="border-t border-slate-100">
+                                    <tr key={i} className="border-t border-[color:var(--border)] text-ink-2">
                                         <td className="px-3 py-1">{r.room_no}</td>
                                         <td className="px-3 py-1 text-right">{r.water}</td>
                                         <td className="px-3 py-1 text-right">{r.electric}</td>
                                     </tr>
                                 ))}
                                 {rows.length > 100 && (
-                                    <tr><td colSpan={3} className="text-center text-slate-400 py-2">
+                                    <tr><td colSpan={3} className="text-center text-ink-4 py-2">
                                         และอีก {rows.length - 100} แถว...
                                     </td></tr>
                                 )}
@@ -206,9 +205,9 @@ export default function BillingImport({ apartmentId, defaultMonth, defaultYear, 
                         )}
                         <details className="mt-2">
                             <summary className="cursor-pointer text-green-800">ดูรายละเอียด</summary>
-                            <div className="overflow-x-auto bg-white rounded-md border border-slate-200 mt-2 max-h-60">
+                            <div className="overflow-x-auto bg-white rounded-xl border border-[color:var(--border)] mt-2 max-h-60">
                                 <table className="min-w-full text-xs">
-                                    <thead className="bg-slate-50 text-slate-600 sticky top-0">
+                                    <thead className="bg-cream-2 text-ink-3 sticky top-0">
                                         <tr>
                                             <th className="text-left px-2 py-1">ห้อง</th>
                                             <th className="text-right px-2 py-1">น้ำเก่า/ใหม่</th>
@@ -221,7 +220,7 @@ export default function BillingImport({ apartmentId, defaultMonth, defaultYear, 
                                     </thead>
                                     <tbody>
                                         {report.items.map((it, i) => (
-                                            <tr key={i} className="border-t border-slate-100">
+                                            <tr key={i} className="border-t border-[color:var(--border)] text-ink-2">
                                                 <td className="px-2 py-1">{it.room_no}</td>
                                                 <td className="px-2 py-1 text-right">{it.water_last}/{it.water_current}</td>
                                                 <td className="px-2 py-1 text-right">{it.elec_last}/{it.elec_current}</td>
@@ -241,7 +240,7 @@ export default function BillingImport({ apartmentId, defaultMonth, defaultYear, 
                 )}
 
                 {!report && (
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-ink-3">
                         * มิเตอร์เก่าจะถูกดึงจากเดือนก่อนหน้าใน DB อัตโนมัติ ค่าเช่าใช้จาก "ราคาห้อง" ที่ตั้งไว้
                           ถ้ามีใบแจ้งหนี้อยู่แล้วจะอัปเดตและคำนวณใหม่
                     </p>
@@ -254,9 +253,9 @@ export default function BillingImport({ apartmentId, defaultMonth, defaultYear, 
 function NumField({ label, value, onChange }) {
     return (
         <label className="block">
-            <span className="text-slate-600">{label}</span>
+            <span className="text-ink-2 font-semibold">{label}</span>
             <input type="number" min={1}
-                   className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1"
+                   className="ui-input mt-1 !py-1.5"
                    value={value}
                    onChange={(e) => onChange(parseInt(e.target.value, 10) || 1)} />
         </label>

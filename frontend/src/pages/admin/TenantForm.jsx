@@ -83,11 +83,11 @@ export default function TenantForm() {
 
     return (
         <div className="max-w-2xl space-y-4">
-            <h1 className="text-2xl font-bold text-slate-800">
+            <h1 className="font-display text-3xl font-bold text-ink">
                 {editMode ? 'แก้ไขผู้เช่า' : 'เพิ่มผู้เช่า'}
             </h1>
 
-            <form onSubmit={submit} className="bg-white border border-slate-200 rounded-lg p-5 space-y-4 text-sm">
+            <form onSubmit={submit} className="ui-card p-5 space-y-4 text-sm">
                 {!editMode && (
                     <>
                         <Field label="อพาร์ทเมนต์" tag="select"
@@ -117,7 +117,7 @@ export default function TenantForm() {
                        onChange={(v) => setForm({ ...form, national_id: v })} />
                 {editMode && form.national_id !== origNid && (
                     <div className="-mt-2 ml-1 text-xs">
-                        <label className="inline-flex items-center gap-2 text-slate-600">
+                        <label className="inline-flex items-center gap-2 text-ink-2">
                             <input type="checkbox" checked={resetPwd}
                                    onChange={(e) => setResetPwd(e.target.checked)} />
                             <span>รีเซ็ตรหัสผ่านผู้เช่าให้เท่ากับเลขบัตรใหม่ (ผู้เช่าจะใช้เลขบัตรใหม่เข้าระบบ)</span>
@@ -132,16 +132,15 @@ export default function TenantForm() {
                        onChange={(v) => setForm({ ...form, notes: v })} />
 
                 {!editMode && (
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-ink-3">
                         * รหัสผ่านเริ่มต้นจะเท่ากับเลขบัตรประชาชน ผู้เช่าควรเปลี่ยนรหัสผ่านเมื่อเข้าใช้งานครั้งแรก
                     </p>
                 )}
 
                 <div className="flex justify-end gap-2">
                     <button type="button" onClick={() => navigate(-1)}
-                            className="px-3 py-1.5 text-sm text-slate-600">ยกเลิก</button>
-                    <button type="submit" disabled={saving}
-                            className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md disabled:opacity-50">
+                            className="btn btn-ghost">ยกเลิก</button>
+                    <button type="submit" disabled={saving} className="btn btn-primary">
                         {saving ? 'กำลังบันทึก...' : 'บันทึก'}
                     </button>
                 </div>
@@ -151,10 +150,10 @@ export default function TenantForm() {
 }
 
 function Field({ label, value, onChange, tag = 'input', children, ...rest }) {
-    const cls = 'mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5';
+    const cls = 'ui-input mt-1 !py-2';
     return (
         <label className="block">
-            <span className="text-slate-600">{label}</span>
+            <span className="text-ink-2 font-semibold">{label}</span>
             {tag === 'select' ? (
                 <select className={cls} value={value} onChange={(e) => onChange(e.target.value)} {...rest}>{children}</select>
             ) : tag === 'textarea' ? (

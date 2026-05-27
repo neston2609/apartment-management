@@ -123,13 +123,16 @@ router.post('/', authenticate, adminOnly, fullAdmin, async (req, res) => {
         }
 
         const room = await client.query(
-            `SELECT r.rental_price, r.apartment_id FROM rooms r WHERE r.room_id = $1`,
+            `SELECT r.rental_price, r.apartment_id, r.status FROM rooms r WHERE r.room_id = $1`,
             [room_id]
         );
         if (!room.rows.length) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Room not found' });
         }
+        // Rooms without a tenant (not 'occupied') auto-mark the bill paid on
+        // creation so they never appear as outstanding.
+        const autoPaid = room.rows[0].status !== 'occupied';
         const settings = (await client.query(
             `SELECT * FROM expense_settings WHERE apartment_id = $1`,
             [room.rows[0].apartment_id]
@@ -169,20 +172,23 @@ router.post('/', authenticate, adminOnly, fullAdmin, async (req, res) => {
              meter.rollover_water, meter.rollover_electricity]
         );
 
-        // Upsert bill
+        // Upsert bill. For non-occupied rooms, mark paid on insert and backfill
+        // paid_at on conflict only when still unpaid (never clear an existing one).
         const { rows } = await client.query(
             `INSERT INTO bills
-             (room_id, month, year, water_cost, electricity_cost, rent_cost, other_cost, total_cost)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+             (room_id, month, year, water_cost, electricity_cost, rent_cost, other_cost, total_cost, paid_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
              ON CONFLICT (room_id, month, year) DO UPDATE SET
                  water_cost       = EXCLUDED.water_cost,
                  electricity_cost = EXCLUDED.electricity_cost,
                  rent_cost        = EXCLUDED.rent_cost,
                  other_cost       = EXCLUDED.other_cost,
                  total_cost       = EXCLUDED.total_cost,
+                 paid_at          = CASE WHEN $10 THEN COALESCE(bills.paid_at, $9) ELSE bills.paid_at END,
                  updated_at = NOW()
              RETURNING *`,
-            [room_id, month, year, calc.water_cost, calc.electricity_cost, rent, other, calc.total_cost]
+            [room_id, month, year, calc.water_cost, calc.electricity_cost, rent, other, calc.total_cost,
+             autoPaid ? new Date() : null, autoPaid]
         );
 
         await client.query('COMMIT');
@@ -211,9 +217,10 @@ router.put('/:id', authenticate, adminOnly, fullAdmin, async (req, res) => {
         const body = req.body;
 
         const room = (await client.query(
-            `SELECT r.apartment_id, r.rental_price FROM rooms r WHERE r.room_id = $1`,
+            `SELECT r.apartment_id, r.rental_price, r.status FROM rooms r WHERE r.room_id = $1`,
             [b.room_id]
         )).rows[0];
+        const autoPaid = room.status !== 'occupied';
         const settings = (await client.query(
             `SELECT * FROM expense_settings WHERE apartment_id = $1`,
             [room.apartment_id]
@@ -255,9 +262,12 @@ router.put('/:id', authenticate, adminOnly, fullAdmin, async (req, res) => {
         const { rows } = await client.query(
             `UPDATE bills
              SET water_cost = $1, electricity_cost = $2, rent_cost = $3, other_cost = $4,
-                 total_cost = $5, updated_at = NOW()
+                 total_cost = $5,
+                 paid_at = CASE WHEN $7 THEN COALESCE(paid_at, $8) ELSE paid_at END,
+                 updated_at = NOW()
              WHERE bill_id = $6 RETURNING *`,
-            [calc.water_cost, calc.electricity_cost, rent, other, calc.total_cost, id]
+            [calc.water_cost, calc.electricity_cost, rent, other, calc.total_cost, id,
+             autoPaid, autoPaid ? new Date() : null]
         );
 
         await client.query('COMMIT');
@@ -400,7 +410,7 @@ router.post('/import', authenticate, adminOnly, fullAdmin, async (req, res) => {
             water_max_units: 9999, electricity_max_units: 9999,
         };
         const roomRows = (await client.query(
-            `SELECT room_id, room_number, rental_price FROM rooms WHERE apartment_id = $1`,
+            `SELECT room_id, room_number, rental_price, status FROM rooms WHERE apartment_id = $1`,
             [apartmentId]
         )).rows;
         const roomMap = new Map(roomRows.map((r) => [String(r.room_number).trim(), r]));
@@ -462,18 +472,22 @@ router.post('/import', authenticate, adminOnly, fullAdmin, async (req, res) => {
                 [room.room_id, month, year, wLast, water, eLast, elec]
             );
 
-            // Upsert bill
+            // Upsert bill. Non-occupied rooms are auto-marked paid so they never
+            // appear as outstanding (paid_at backfilled only when still unpaid).
+            const autoPaid = room.status !== 'occupied';
             await client.query(
                 `INSERT INTO bills
-                 (room_id, month, year, water_cost, electricity_cost, rent_cost, other_cost, total_cost)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+                 (room_id, month, year, water_cost, electricity_cost, rent_cost, other_cost, total_cost, paid_at)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
                  ON CONFLICT (room_id, month, year) DO UPDATE SET
                      water_cost       = EXCLUDED.water_cost,
                      electricity_cost = EXCLUDED.electricity_cost,
                      rent_cost        = EXCLUDED.rent_cost,
                      total_cost       = EXCLUDED.total_cost,
+                     paid_at          = CASE WHEN $10 THEN COALESCE(bills.paid_at, $9) ELSE bills.paid_at END,
                      updated_at = NOW()`,
-                [room.room_id, month, year, wCost, eCost, rent, other, total]
+                [room.room_id, month, year, wCost, eCost, rent, other, total,
+                 autoPaid ? new Date() : null, autoPaid]
             );
 
             if (existingBill) updated++; else imported++;

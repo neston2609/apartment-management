@@ -42,9 +42,8 @@ export default function ChangePasswordModal({ open, onClose }) {
             footer={
                 <>
                     <button onClick={() => { reset(); onClose(); }}
-                            className="px-3 py-1.5 text-sm text-slate-600">ยกเลิก</button>
-                    <button onClick={submit} disabled={busy}
-                            className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md disabled:opacity-50">
+                            className="btn btn-ghost">ยกเลิก</button>
+                    <button onClick={submit} disabled={busy} className="btn btn-primary">
                         {busy ? 'กำลังบันทึก...' : 'บันทึก'}
                     </button>
                 </>
@@ -62,9 +61,9 @@ export default function ChangePasswordModal({ open, onClose }) {
 function Field({ label, value, onChange }) {
     return (
         <label className="block">
-            <span className="text-slate-600">{label}</span>
+            <span className="text-ink-2 font-semibold">{label}</span>
             <input type="password" required
-                   className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                   className="ui-input mt-1 !py-2"
                    value={value} onChange={(e) => onChange(e.target.value)} />
         </label>
     );

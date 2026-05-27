@@ -12,9 +12,9 @@ const ROLE_OPTIONS = [
 ];
 
 const ROLE_BADGE = {
-    super_admin:      'bg-purple-100 text-purple-700',
-    admin:            'bg-blue-100 text-blue-700',
-    property_manager: 'bg-amber-100 text-amber-700',
+    super_admin:      'bg-violet-soft text-[#6d28d9]',
+    admin:            'bg-cyan-soft text-[#0e7490]',
+    property_manager: 'bg-orange-soft text-[#b45309]',
 };
 
 export default function Users() {
@@ -71,24 +71,23 @@ export default function Users() {
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-slate-800">จัดการผู้ใช้</h1>
-                <button onClick={() => setCreateOpen(true)}
-                        className="bg-brand-600 hover:bg-brand-700 text-white text-sm px-3 py-2 rounded-md">
+                <h1 className="font-display text-3xl font-bold text-ink">จัดการผู้ใช้</h1>
+                <button onClick={() => setCreateOpen(true)} className="btn btn-primary">
                     เพิ่มผู้ใช้
                 </button>
             </div>
 
             {/* Admin users */}
-            <section className="bg-white border border-slate-200 rounded-lg">
-                <div className="px-5 py-3 border-b border-slate-200">
-                    <h2 className="font-semibold text-slate-700">ผู้ดูแลระบบ / ผู้ดูแลหอพัก</h2>
-                    <p className="text-xs text-slate-500 mt-0.5">
+            <section className="ui-card">
+                <div className="px-5 py-3 border-b border-[color:var(--border)]">
+                    <h2 className="font-display font-bold text-ink">ผู้ดูแลระบบ / ผู้ดูแลหอพัก</h2>
+                    <p className="text-xs text-ink-3 mt-0.5">
                         ผู้ดูแลหอพักจะเห็นเฉพาะหน้า "พิมพ์ใบแจ้งหนี้" เท่านั้น
                     </p>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="min-w-full text-sm">
-                        <thead className="bg-slate-50 text-slate-600">
+                        <thead className="bg-cream-2 text-ink-3">
                             <tr>
                                 <th className="text-left px-4 py-2">ชื่อผู้ใช้</th>
                                 <th className="text-left px-4 py-2">ชื่อ-สกุล</th>
@@ -100,8 +99,8 @@ export default function Users() {
                         </thead>
                         <tbody>
                             {users.map((u) => (
-                                <tr key={u.admin_id} className="border-t border-slate-100 hover:bg-slate-50">
-                                    <td className="px-4 py-2 font-medium">{u.username}{u.admin_id === me?.id && (<span className="ml-1 text-xs text-slate-400">(คุณ)</span>)}</td>
+                                <tr key={u.admin_id} className="border-t border-[color:var(--border)] hover:bg-cream-surface text-ink-2">
+                                    <td className="px-4 py-2 font-medium">{u.username}{u.admin_id === me?.id && (<span className="ml-1 text-xs text-ink-4">(คุณ)</span>)}</td>
                                     <td className="px-4 py-2">{u.full_name || '-'}</td>
                                     <td className="px-4 py-2">{u.email || '-'}</td>
                                     <td className="px-4 py-2">
@@ -124,7 +123,7 @@ export default function Users() {
                                 </tr>
                             ))}
                             {users.length === 0 && (
-                                <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-400">ยังไม่มีผู้ใช้</td></tr>
+                                <tr><td colSpan={6} className="px-4 py-8 text-center text-ink-4">ยังไม่มีผู้ใช้</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -132,22 +131,22 @@ export default function Users() {
             </section>
 
             {/* Tenant password reset */}
-            <section className="bg-white border border-slate-200 rounded-lg">
-                <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3">
+            <section className="ui-card">
+                <div className="px-5 py-3 border-b border-[color:var(--border)] flex items-center justify-between gap-3">
                     <div>
-                        <h2 className="font-semibold text-slate-700">รีเซ็ตรหัสผ่านผู้เช่า</h2>
-                        <p className="text-xs text-slate-500 mt-0.5">
+                        <h2 className="font-display font-bold text-ink">รีเซ็ตรหัสผ่านผู้เช่า</h2>
+                        <p className="text-xs text-ink-3 mt-0.5">
                             ค้นหาผู้เช่าตามชื่อ เลขห้อง หรือเลขบัตรประชาชน แล้วกดรีเซ็ตเพื่อกำหนดรหัสผ่านใหม่
                         </p>
                     </div>
                     <input type="text" placeholder="ค้นหา..."
                            value={tenantSearch}
                            onChange={(e) => setTenantSearch(e.target.value)}
-                           className="border border-slate-300 rounded-md px-2 py-1 text-sm w-48" />
+                           className="ui-input !py-2 text-sm w-48" />
                 </div>
                 <div className="overflow-x-auto">
                     <table className="min-w-full text-sm">
-                        <thead className="bg-slate-50 text-slate-600">
+                        <thead className="bg-cream-2 text-ink-3">
                             <tr>
                                 <th className="text-left px-4 py-2">ห้อง</th>
                                 <th className="text-left px-4 py-2">ชื่อ-สกุล</th>
@@ -157,7 +156,7 @@ export default function Users() {
                         </thead>
                         <tbody>
                             {visibleTenants.map((t) => (
-                                <tr key={t.tenant_id} className="border-t border-slate-100 hover:bg-slate-50">
+                                <tr key={t.tenant_id} className="border-t border-[color:var(--border)] hover:bg-cream-surface text-ink-2">
                                     <td className="px-4 py-2 font-medium">{t.room_number || '-'}</td>
                                     <td className="px-4 py-2">{t.full_name}</td>
                                     <td className="px-4 py-2">{t.national_id}</td>
@@ -170,7 +169,7 @@ export default function Users() {
                                 </tr>
                             ))}
                             {visibleTenants.length === 0 && (
-                                <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-400">ไม่พบผู้เช่า</td></tr>
+                                <tr><td colSpan={4} className="px-4 py-8 text-center text-ink-4">ไม่พบผู้เช่า</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -229,9 +228,9 @@ function CreateUserModal({ open, onClose, onSaved, apts }) {
                footer={
                    <>
                        <button onClick={() => { reset(); onClose(); }}
-                               className="px-3 py-1.5 text-sm text-slate-600">ยกเลิก</button>
+                               className="btn btn-ghost">ยกเลิก</button>
                        <button onClick={submit} disabled={busy}
-                               className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md disabled:opacity-50">
+                               className="btn btn-primary">
                            {busy ? 'กำลังบันทึก...' : 'บันทึก'}
                        </button>
                    </>
@@ -248,16 +247,16 @@ function CreateUserModal({ open, onClose, onSaved, apts }) {
                 <Field label="อีเมล" type="email" value={form.email}
                        onChange={(v) => setForm({ ...form, email: v })} />
                 <label className="block">
-                    <span className="text-slate-600">บทบาท</span>
-                    <select className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                    <span className="text-ink-2 font-semibold">บทบาท</span>
+                    <select className="ui-input mt-1 !py-2"
                             value={form.role}
                             onChange={(e) => setForm({ ...form, role: e.target.value })}>
                         {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                 </label>
                 <label className="block">
-                    <span className="text-slate-600">ผูกกับอพาร์ทเมนต์ (ตัวเลือก)</span>
-                    <select className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                    <span className="text-ink-2 font-semibold">ผูกกับอพาร์ทเมนต์ (ตัวเลือก)</span>
+                    <select className="ui-input mt-1 !py-2"
                             value={form.apartment_id}
                             onChange={(e) => setForm({ ...form, apartment_id: e.target.value })}>
                         <option value="">— ไม่ผูก —</option>
@@ -307,9 +306,9 @@ function EditUserModal({ open, user, onClose, onSaved, apts }) {
                onClose={onClose}
                footer={
                    <>
-                       <button onClick={onClose} className="px-3 py-1.5 text-sm text-slate-600">ยกเลิก</button>
+                       <button onClick={onClose} className="btn btn-ghost">ยกเลิก</button>
                        <button onClick={submit} disabled={busy}
-                               className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md disabled:opacity-50">
+                               className="btn btn-primary">
                            {busy ? 'กำลังบันทึก...' : 'บันทึก'}
                        </button>
                    </>
@@ -320,16 +319,16 @@ function EditUserModal({ open, user, onClose, onSaved, apts }) {
                 <Field label="อีเมล" type="email" value={form.email || ''}
                        onChange={(v) => setForm({ ...form, email: v })} />
                 <label className="block">
-                    <span className="text-slate-600">บทบาท</span>
-                    <select className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                    <span className="text-ink-2 font-semibold">บทบาท</span>
+                    <select className="ui-input mt-1 !py-2"
                             value={form.role || 'admin'}
                             onChange={(e) => setForm({ ...form, role: e.target.value })}>
                         {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                 </label>
                 <label className="block">
-                    <span className="text-slate-600">ผูกกับอพาร์ทเมนต์</span>
-                    <select className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                    <span className="text-ink-2 font-semibold">ผูกกับอพาร์ทเมนต์</span>
+                    <select className="ui-input mt-1 !py-2"
                             value={form.apartment_id || ''}
                             onChange={(e) => setForm({ ...form, apartment_id: e.target.value })}>
                         <option value="">— ไม่ผูก —</option>
@@ -371,20 +370,20 @@ function ResetTenantPwdModal({ open, tenant, onClose }) {
                footer={
                    <>
                        <button onClick={() => { setPwd(''); onClose(); }}
-                               className="px-3 py-1.5 text-sm text-slate-600">ยกเลิก</button>
+                               className="btn btn-ghost">ยกเลิก</button>
                        <button onClick={submit} disabled={busy}
-                               className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md disabled:opacity-50">
+                               className="btn btn-primary">
                            {busy ? 'กำลังบันทึก...' : 'รีเซ็ต'}
                        </button>
                    </>
                }>
             <div className="space-y-3 text-sm">
-                <p className="text-slate-600">
+                <p className="text-ink-2">
                     ห้อง <strong>{tenant.room_number || '-'}</strong> · เลขบัตร <strong>{tenant.national_id}</strong>
                 </p>
                 <Field label="รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)" type="password"
                        value={pwd} onChange={setPwd} />
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-ink-3">
                     ผู้เช่าจะใช้รหัสผ่านใหม่นี้ในการเข้าระบบครั้งถัดไป
                 </p>
             </div>
@@ -395,9 +394,9 @@ function ResetTenantPwdModal({ open, tenant, onClose }) {
 function Field({ label, value, onChange, type = 'text', required }) {
     return (
         <label className="block">
-            <span className="text-slate-600">{label}</span>
+            <span className="text-ink-2 font-semibold">{label}</span>
             <input type={type} required={required}
-                   className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                   className="ui-input mt-1 !py-2"
                    value={value || ''}
                    onChange={(e) => onChange(e.target.value)} />
         </label>

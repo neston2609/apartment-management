@@ -104,15 +104,15 @@ export default function BillingForm() {
     return (
         <div className="max-w-3xl space-y-4">
             <div>
-                <h1 className="text-2xl font-bold text-slate-800">
+                <h1 className="font-display text-3xl font-bold text-ink">
                     {existing ? 'แก้ไขใบแจ้งหนี้' : 'สร้างใบแจ้งหนี้'}
                 </h1>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-ink-3">
                     ห้อง {room.room_number} · ประจำเดือน {THAI_MONTHS[Number(month) - 1]} {thaiYear(year)}
                 </p>
             </div>
 
-            <form onSubmit={submit} className="bg-white border border-slate-200 rounded-lg p-5 space-y-5 text-sm">
+            <form onSubmit={submit} className="ui-card p-5 space-y-5 text-sm">
                 <Section title="ค่าน้ำประปา">
                     <div className="grid grid-cols-2 gap-3">
                         <NumInput int label="มิเตอร์ครั้งก่อน" value={form.water_units_last}
@@ -120,12 +120,12 @@ export default function BillingForm() {
                         <NumInput int label="มิเตอร์ครั้งนี้" value={form.water_units_current}
                                 onChange={(v) => setForm({ ...form, water_units_current: v })} />
                     </div>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-ink-3">
                         มิเตอร์ครั้งก่อนดึงจากค่าล่าสุดอัตโนมัติ (ถ้ายังไม่มี = 0) สามารถแก้ไขได้
                     </p>
                     <Checkbox label="มิเตอร์ครบรอบ (rollover)" checked={form.rollover_water}
                               onChange={(v) => setForm({ ...form, rollover_water: v })} />
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-ink-3">
                         ราคา/หน่วย: ฿ {fmtMoney(settings.water_price_per_unit)} ·
                         จำนวนหน่วย: {Math.trunc(c.w_usage)} · รวมค่าน้ำ: ฿ {fmtMoney(c.water_cost)}
                     </p>
@@ -138,12 +138,12 @@ export default function BillingForm() {
                         <NumInput int label="มิเตอร์ครั้งนี้" value={form.electricity_units_current}
                                 onChange={(v) => setForm({ ...form, electricity_units_current: v })} />
                     </div>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-ink-3">
                         มิเตอร์ครั้งก่อนดึงจากค่าล่าสุดอัตโนมัติ (ถ้ายังไม่มี = 0) สามารถแก้ไขได้
                     </p>
                     <Checkbox label="มิเตอร์ครบรอบ (rollover)" checked={form.rollover_electricity}
                               onChange={(v) => setForm({ ...form, rollover_electricity: v })} />
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-ink-3">
                         ราคา/หน่วย: ฿ {fmtMoney(settings.electricity_price_per_unit)} ·
                         จำนวนหน่วย: {Math.trunc(c.e_usage)} · รวมค่าไฟ: ฿ {fmtMoney(c.electricity_cost)}
                     </p>
@@ -154,7 +154,7 @@ export default function BillingForm() {
                         <div>
                             <NumInput label="ค่าเช่าห้อง" value={form.rent_cost}
                                     onChange={(v) => setForm({ ...form, rent_cost: v })} />
-                            <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                            <div className="mt-1 flex items-center gap-2 text-xs text-ink-3">
                                 <span>ดึงจากราคาห้องที่ตั้งไว้: ฿ {fmtMoney(room.rental_price)}</span>
                                 {Number(form.rent_cost) !== Number(room.rental_price) && (
                                     <button type="button"
@@ -170,16 +170,15 @@ export default function BillingForm() {
                     </div>
                 </Section>
 
-                <div className="bg-brand-50 border border-brand-500/20 rounded-md p-4 flex items-center justify-between">
-                    <span className="text-slate-700">รวมทั้งสิ้น</span>
-                    <span className="text-2xl font-bold text-brand-700">฿ {fmtMoney(c.total)}</span>
+                <div className="bg-violet-soft border border-violet/20 rounded-2xl p-4 flex items-center justify-between">
+                    <span className="text-ink-2 font-semibold">รวมทั้งสิ้น</span>
+                    <span className="font-display text-2xl font-bold text-violet">฿ {fmtMoney(c.total)}</span>
                 </div>
 
                 <div className="flex justify-end gap-2">
                     <button type="button" onClick={() => navigate('/admin/billing')}
-                            className="px-3 py-1.5 text-sm text-slate-600">ยกเลิก</button>
-                    <button type="submit" disabled={saving}
-                            className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md disabled:opacity-50">
+                            className="btn btn-ghost">ยกเลิก</button>
+                    <button type="submit" disabled={saving} className="btn btn-primary">
                         {saving ? 'กำลังบันทึก...' : 'บันทึก'}
                     </button>
                 </div>
@@ -191,7 +190,7 @@ export default function BillingForm() {
 function Section({ title, children }) {
     return (
         <div className="space-y-2">
-            <h3 className="font-semibold text-slate-700">{title}</h3>
+            <h3 className="font-display font-bold text-ink">{title}</h3>
             {children}
         </div>
     );
@@ -204,10 +203,10 @@ function NumInput({ label, value, onChange, int = false }) {
     const display = int ? Math.trunc(num) : num;
     return (
         <label className="block">
-            <span className="text-slate-600">{label}</span>
+            <span className="text-ink-2 font-semibold">{label}</span>
             <input type="number" step={step} min="0"
                    inputMode={int ? 'numeric' : 'decimal'}
-                   className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                   className="ui-input mt-1 !py-2"
                    value={display}
                    onChange={(e) => onChange(parse(e.target.value))} />
         </label>
@@ -218,7 +217,7 @@ function Checkbox({ label, checked, onChange }) {
     return (
         <label className="inline-flex items-center gap-2">
             <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-            <span className="text-slate-600">{label}</span>
+            <span className="text-ink-2 font-semibold">{label}</span>
         </label>
     );
 }

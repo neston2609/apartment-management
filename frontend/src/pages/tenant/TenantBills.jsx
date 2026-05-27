@@ -92,10 +92,10 @@ export default function TenantBills() {
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <h1 className="text-2xl font-bold text-slate-800">ใบแจ้งหนี้ของฉัน</h1>
+                <h1 className="font-display text-3xl font-bold text-ink">ใบแจ้งหนี้ของฉัน</h1>
                 <div className="flex items-center gap-2 text-sm">
-                    <label className="text-slate-600">ปี (พ.ศ.):</label>
-                    <select className="border border-slate-300 rounded-md px-2 py-1"
+                    <label className="text-ink-2 font-medium">ปี (พ.ศ.):</label>
+                    <select className="ui-input !py-2 !w-auto"
                             value={year}
                             onChange={(e) => setYear(parseInt(e.target.value, 10))}>
                         {yearOptions.map((y) => (
@@ -105,18 +105,18 @@ export default function TenantBills() {
                 </div>
             </div>
 
-            <div className="overflow-x-auto bg-white rounded-lg border border-slate-200">
+            <div className="overflow-x-auto ui-card">
                 <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50 text-slate-600">
-                        <tr>
-                            <th className="text-left px-4 py-2">เดือน</th>
-                            <th className="text-left px-4 py-2">สถานะ</th>
-                            <th className="text-right px-4 py-2">ค่าน้ำ</th>
-                            <th className="text-right px-4 py-2">ค่าไฟ</th>
-                            <th className="text-right px-4 py-2">ค่าเช่า</th>
-                            <th className="text-right px-4 py-2">อื่น ๆ</th>
-                            <th className="text-right px-4 py-2">รวม</th>
-                            <th className="px-4 py-2"></th>
+                    <thead className="bg-cream-2 text-ink-3">
+                        <tr className="[&>th]:text-[11px] [&>th]:font-bold [&>th]:uppercase [&>th]:tracking-wider [&>th]:px-4 [&>th]:py-3.5 [&>th]:border-b [&>th]:border-[color:var(--border)]">
+                            <th className="text-left">เดือน</th>
+                            <th className="text-left">สถานะ</th>
+                            <th className="!text-right">ค่าน้ำ</th>
+                            <th className="!text-right">ค่าไฟ</th>
+                            <th className="!text-right">ค่าเช่า</th>
+                            <th className="!text-right">อื่น ๆ</th>
+                            <th className="!text-right">รวม</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -128,12 +128,12 @@ export default function TenantBills() {
                             const slipStatus = b.payment_slip_status;
                             return (
                                 <tr key={b.bill_id}
-                                    className={`border-t border-slate-100 ${isCurrent ? 'bg-blue-50/40' : ''}`}>
-                                    <td className="px-4 py-2">
+                                    className={`border-t border-[color:var(--border)] text-ink-2 ${isCurrent ? 'bg-violet-soft/50' : ''}`}>
+                                    <td className="px-4 py-3 font-medium">
                                         {THAI_MONTHS[b.month - 1]} {thaiYear(b.year)}
-                                        {isCurrent && <span className="ml-2 text-xs text-brand-700">(ปัจจุบัน)</span>}
+                                        {isCurrent && <span className="ml-2 text-xs font-bold text-violet">(ปัจจุบัน)</span>}
                                     </td>
-                                    <td className="px-4 py-2">
+                                    <td className="px-4 py-3">
                                         <div className="flex flex-col gap-0.5">
                                             {ps && (
                                                 <>
@@ -160,31 +160,31 @@ export default function TenantBills() {
                                             )}
                                         </div>
                                     </td>
-                                    <td className="px-4 py-2 text-right">{fmtMoney(b.water_cost)}</td>
-                                    <td className="px-4 py-2 text-right">{fmtMoney(b.electricity_cost)}</td>
-                                    <td className="px-4 py-2 text-right">{fmtMoney(b.rent_cost)}</td>
-                                    <td className="px-4 py-2 text-right">{fmtMoney(b.other_cost)}</td>
-                                    <td className="px-4 py-2 text-right font-semibold">
+                                    <td className="px-4 py-3 text-right font-mono">{fmtMoney(b.water_cost)}</td>
+                                    <td className="px-4 py-3 text-right font-mono">{fmtMoney(b.electricity_cost)}</td>
+                                    <td className="px-4 py-3 text-right font-mono">{fmtMoney(b.rent_cost)}</td>
+                                    <td className="px-4 py-3 text-right font-mono">{fmtMoney(b.other_cost)}</td>
+                                    <td className="px-4 py-3 text-right font-bold text-ink">
                                         <div className="flex flex-col items-end gap-0.5">
-                                            <span>฿ {fmtMoney(b.total_cost)}</span>
+                                            <span className="font-mono">฿ {fmtMoney(b.total_cost)}</span>
                                             {lateFee > 0 && (
-                                                <span className="text-[11px] text-red-700 font-normal">
+                                                <span className="text-[11px] text-[#b91c1c] font-normal">
                                                     + ฿ {fmtMoney(lateFee)} ค่าปรับ → ฿ {fmtMoney(grand)}
                                                 </span>
                                             )}
                                         </div>
                                     </td>
-                                    <td className="px-4 py-2">
-                                        <div className="flex flex-col items-end gap-1">
+                                    <td className="px-4 py-3">
+                                        <div className="flex flex-col items-end gap-1.5">
                                             {/* Show "ชำระเงิน" button for unpaid bills */}
                                             {!b.paid_at && (
                                                 <button onClick={() => openPayModal(b)}
-                                                        className="bg-brand-600 hover:bg-brand-700 text-white text-xs px-3 py-1 rounded-md whitespace-nowrap">
+                                                        className="btn btn-primary !px-3 !py-1.5 !text-xs whitespace-nowrap">
                                                     {slipStatus === 'pending' ? 'ส่งสลิปใหม่' : 'ชำระเงิน'}
                                                 </button>
                                             )}
                                             <button onClick={() => downloadPdf(b.bill_id, 'A5', 'th')}
-                                                    className="text-xs text-slate-500 hover:text-slate-700 hover:underline whitespace-nowrap">
+                                                    className="text-xs text-ink-3 hover:text-ink hover:underline whitespace-nowrap">
                                                 ดาวน์โหลด PDF
                                             </button>
                                         </div>
@@ -193,7 +193,7 @@ export default function TenantBills() {
                             );
                         })}
                         {visible.length === 0 && (
-                            <tr><td colSpan={8} className="px-4 py-6 text-center text-slate-400">
+                            <tr><td colSpan={8} className="px-4 py-8 text-center text-ink-4">
                                 ไม่มีใบแจ้งหนี้สำหรับปีนี้
                             </td></tr>
                         )}
@@ -228,46 +228,46 @@ function PaymentModal({ bill, slipFile, slipPreview, uploading, slipInputRef, on
     const hasPay   = hasBank || qrUrl;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 backdrop-blur-sm p-4"
              onClick={onClose}>
-            <div className="relative w-full max-w-md bg-white rounded-xl shadow-2xl"
+            <div className="relative w-full max-w-md bg-white rounded-[20px] shadow-soft-lg border border-[color:var(--border)]"
                  onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-                    <h2 className="font-semibold text-slate-800">ชำระเงิน — {THAI_MONTHS[bill.month - 1]} {thaiYear(bill.year)}</h2>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-2xl leading-none">×</button>
+                <div className="flex items-center justify-between px-5 py-4 border-b border-[color:var(--border)]">
+                    <h2 className="font-display font-bold text-ink">ชำระเงิน — {THAI_MONTHS[bill.month - 1]} {thaiYear(bill.year)}</h2>
+                    <button onClick={onClose} className="text-ink-3 hover:text-ink text-2xl leading-none">×</button>
                 </div>
 
                 <div className="px-5 py-4 space-y-4 max-h-[80vh] overflow-y-auto">
                     {/* Bill summary */}
-                    <div className="bg-slate-50 rounded-lg p-3 space-y-1 text-sm">
+                    <div className="bg-cream-surface rounded-2xl p-3.5 space-y-1 text-sm">
                         <div className="flex justify-between">
-                            <span className="text-slate-600">ค่าน้ำ</span>
-                            <span>฿ {fmtMoney(bill.water_cost)}</span>
+                            <span className="text-ink-3">ค่าน้ำ</span>
+                            <span className="font-mono">฿ {fmtMoney(bill.water_cost)}</span>
                         </div>
                         <div className="flex justify-between">
-                            <span className="text-slate-600">ค่าไฟ</span>
-                            <span>฿ {fmtMoney(bill.electricity_cost)}</span>
+                            <span className="text-ink-3">ค่าไฟ</span>
+                            <span className="font-mono">฿ {fmtMoney(bill.electricity_cost)}</span>
                         </div>
                         <div className="flex justify-between">
-                            <span className="text-slate-600">ค่าเช่า</span>
-                            <span>฿ {fmtMoney(bill.rent_cost)}</span>
+                            <span className="text-ink-3">ค่าเช่า</span>
+                            <span className="font-mono">฿ {fmtMoney(bill.rent_cost)}</span>
                         </div>
                         {Number(bill.other_cost) > 0 && (
                             <div className="flex justify-between">
-                                <span className="text-slate-600">ค่าอื่น ๆ</span>
-                                <span>฿ {fmtMoney(bill.other_cost)}</span>
+                                <span className="text-ink-3">ค่าอื่น ๆ</span>
+                                <span className="font-mono">฿ {fmtMoney(bill.other_cost)}</span>
                             </div>
                         )}
                         {lateFee > 0 && (
-                            <div className="flex justify-between text-red-700">
+                            <div className="flex justify-between text-[#b91c1c]">
                                 <span>ค่าปรับ ({ps.days_overdue} วัน)</span>
-                                <span>฿ {fmtMoney(lateFee)}</span>
+                                <span className="font-mono">฿ {fmtMoney(lateFee)}</span>
                             </div>
                         )}
-                        <div className="flex justify-between font-bold text-brand-700 pt-1 border-t border-slate-200 mt-1">
+                        <div className="flex justify-between font-bold text-violet pt-1.5 border-t border-[color:var(--border)] mt-1.5">
                             <span>ยอดที่ต้องชำระ</span>
-                            <span>฿ {fmtMoney(grand)}</span>
+                            <span className="font-mono">฿ {fmtMoney(grand)}</span>
                         </div>
                     </div>
 
@@ -275,74 +275,73 @@ function PaymentModal({ bill, slipFile, slipPreview, uploading, slipInputRef, on
                     {hasPay ? (
                         <div className="space-y-3">
                             {hasBank && (
-                                <div className="border border-slate-200 rounded-lg p-3 text-sm space-y-1">
-                                    <p className="font-medium text-slate-700 mb-1">ข้อมูลการโอนเงิน</p>
+                                <div className="border border-[color:var(--border)] rounded-2xl p-3.5 text-sm space-y-1">
+                                    <p className="font-bold text-ink mb-1">ข้อมูลการโอนเงิน</p>
                                     {bill.bank_name && (
                                         <div className="flex gap-2">
-                                            <span className="text-slate-500 w-24 shrink-0">ธนาคาร</span>
-                                            <span className="font-medium">{bill.bank_name}</span>
+                                            <span className="text-ink-3 w-24 shrink-0">ธนาคาร</span>
+                                            <span className="font-medium text-ink">{bill.bank_name}</span>
                                         </div>
                                     )}
                                     {bill.bank_account_number && (
                                         <div className="flex gap-2">
-                                            <span className="text-slate-500 w-24 shrink-0">เลขบัญชี</span>
-                                            <span className="font-mono font-medium tracking-wide">{bill.bank_account_number}</span>
+                                            <span className="text-ink-3 w-24 shrink-0">เลขบัญชี</span>
+                                            <span className="font-mono font-medium tracking-wide text-ink">{bill.bank_account_number}</span>
                                         </div>
                                     )}
                                     {bill.bank_account_name && (
                                         <div className="flex gap-2">
-                                            <span className="text-slate-500 w-24 shrink-0">ชื่อบัญชี</span>
-                                            <span className="font-medium">{bill.bank_account_name}</span>
+                                            <span className="text-ink-3 w-24 shrink-0">ชื่อบัญชี</span>
+                                            <span className="font-medium text-ink">{bill.bank_account_name}</span>
                                         </div>
                                     )}
                                 </div>
                             )}
                             {qrUrl && (
                                 <div className="flex flex-col items-center gap-2">
-                                    <p className="text-sm font-medium text-slate-700 self-start">QR Code สำหรับชำระเงิน</p>
+                                    <p className="text-sm font-bold text-ink self-start">QR Code สำหรับชำระเงิน</p>
                                     <img src={qrUrl} alt="QR Code"
-                                         className="w-48 h-48 object-contain border border-slate-200 rounded-lg bg-white p-1" />
+                                         className="w-48 h-48 object-contain border border-[color:var(--border)] rounded-2xl bg-white p-1" />
                                 </div>
                             )}
                         </div>
                     ) : (
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                        <div className="bg-sunshine-soft border border-sunshine/40 rounded-2xl p-3 text-sm text-[#b45309]">
                             ยังไม่มีข้อมูลการชำระเงิน — กรุณาติดต่อผู้ดูแลหอพัก
                         </div>
                     )}
 
                     {/* Slip upload */}
-                    <div className="border-t border-slate-100 pt-3 space-y-2">
-                        <p className="text-sm font-medium text-slate-700">แนบสลิปการโอนเงิน</p>
-                        <p className="text-xs text-slate-500">
+                    <div className="border-t border-[color:var(--border)] pt-3 space-y-2">
+                        <p className="text-sm font-bold text-ink">แนบสลิปการโอนเงิน</p>
+                        <p className="text-xs text-ink-3">
                             หลังโอนเงินแล้ว กรุณาอัปโหลดสลิปเพื่อยืนยันการชำระ
                         </p>
                         <div className="flex flex-wrap items-center gap-2">
-                            <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-md text-slate-700 text-sm">
+                            <label className="btn btn-ghost cursor-pointer">
                                 เลือกรูปสลิป
                                 <input ref={slipInputRef} type="file" accept="image/*" className="hidden"
                                        onChange={onFileChange} />
                             </label>
                             {slipFile && (
-                                <span className="text-xs text-slate-600 truncate max-w-[160px]">{slipFile.name}</span>
+                                <span className="text-xs text-ink-2 truncate max-w-[160px]">{slipFile.name}</span>
                             )}
                         </div>
                         {slipPreview && (
                             <img src={slipPreview} alt="ตัวอย่างสลิป"
-                                 className="w-full max-h-48 object-contain border border-slate-200 rounded-lg" />
+                                 className="w-full max-h-48 object-contain border border-[color:var(--border)] rounded-2xl" />
                         )}
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="flex justify-end gap-2 px-5 py-3 border-t border-slate-100">
-                    <button onClick={onClose}
-                            className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md">
+                <div className="flex justify-end gap-2 px-5 py-3 border-t border-[color:var(--border)] bg-cream-surface rounded-b-[20px]">
+                    <button onClick={onClose} className="btn btn-ghost">
                         ปิด
                     </button>
                     <button onClick={onSubmit}
                             disabled={!slipFile || uploading}
-                            className="px-4 py-2 text-sm bg-brand-600 text-white rounded-md disabled:opacity-50 hover:bg-brand-700">
+                            className="btn btn-primary">
                         {uploading ? 'กำลังส่ง...' : 'ส่งสลิป'}
                     </button>
                 </div>

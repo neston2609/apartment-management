@@ -121,51 +121,50 @@ export default function Billing() {
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <h1 className="text-2xl font-bold text-slate-800">ใบแจ้งค่าเช่า</h1>
+                <h1 className="font-display text-3xl font-bold text-ink">ใบแจ้งค่าเช่า</h1>
                 {!isPropertyManager && (
                     <div className="flex flex-wrap gap-2">
                         <button onClick={bulkMarkPaid}
                                 disabled={bulkBusy || unpaidCount === 0}
-                                className="bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-2 rounded-md disabled:opacity-50">
+                                className="btn btn-mint">
                             {bulkBusy
                                 ? 'กำลังบันทึก...'
                                 : `✓ ชำระแล้วทุกห้อง${unpaidCount > 0 ? ` (${unpaidCount})` : ''}`}
                         </button>
-                        <button onClick={() => setImportOpen(true)}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 py-2 rounded-md">
+                        <button onClick={() => setImportOpen(true)} className="btn btn-ghost">
                             นำเข้าจาก Excel
                         </button>
                     </div>
                 )}
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap gap-3 items-center text-sm">
+            <div className="ui-card p-3.5 flex flex-wrap gap-3 items-center text-sm">
                 <select value={aptId} onChange={(e) => setAptId(e.target.value)}
-                        className="border border-slate-300 rounded-md px-2 py-1">
+                        className="ui-input !py-2 !w-auto">
                     {apts.map((a) => <option key={a.apartment_id} value={a.apartment_id}>{a.name}</option>)}
                 </select>
                 <select value={month} onChange={(e) => setMonth(parseInt(e.target.value, 10))}
-                        className="border border-slate-300 rounded-md px-2 py-1">
+                        className="ui-input !py-2 !w-auto">
                     {THAI_MONTHS.map((n, i) => <option key={i + 1} value={i + 1}>{n}</option>)}
                 </select>
                 <input type="number" value={year} onChange={(e) => setYear(parseInt(e.target.value, 10))}
-                       className="border border-slate-300 rounded-md px-2 py-1 w-24" />
-                <span className="text-slate-500">พ.ศ. {thaiYear(year)}</span>
+                       className="ui-input !py-2 w-24" />
+                <span className="text-ink-3 font-mono">พ.ศ. {thaiYear(year)}</span>
             </div>
 
             {loading
                 ? <div className="grid place-items-center h-32"><Spinner /></div>
                 : (
-                    <div className="overflow-x-auto bg-white rounded-lg border border-slate-200">
+                    <div className="overflow-x-auto ui-card">
                         <table className="min-w-full text-sm">
-                            <thead className="bg-slate-50 text-slate-600">
-                                <tr>
-                                    <th className="text-left px-4 py-2">ห้อง</th>
-                                    <th className="text-left px-4 py-2">ผู้เช่า</th>
-                                    <th className="text-left px-4 py-2">สถานะ</th>
-                                    <th className="text-left px-4 py-2">สลิปการชำระ</th>
-                                    <th className="text-right px-4 py-2">รวม</th>
-                                    <th className="px-4 py-2"></th>
+                            <thead className="bg-cream-2 text-ink-3">
+                                <tr className="[&>th]:text-[11px] [&>th]:font-bold [&>th]:uppercase [&>th]:tracking-wider [&>th]:px-4 [&>th]:py-3.5 [&>th]:border-b [&>th]:border-[color:var(--border)]">
+                                    <th className="text-left">ห้อง</th>
+                                    <th className="text-left">ผู้เช่า</th>
+                                    <th className="text-left">สถานะ</th>
+                                    <th className="text-left">สลิปการชำระ</th>
+                                    <th className="!text-right">รวม</th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -183,10 +182,10 @@ export default function Billing() {
                                         ? (b.payment_slip_url || getUploadUrl(slipPath))
                                         : null;
                                     return (
-                                        <tr key={r.room_id} className="border-t border-slate-100 hover:bg-slate-50">
-                                            <td className="px-4 py-2 font-medium">{r.room_number}</td>
-                                            <td className="px-4 py-2">{r.tenant_name || '-'}</td>
-                                            <td className="px-4 py-2">
+                                        <tr key={r.room_id} className="border-t border-[color:var(--border)] hover:bg-cream-surface text-ink-2">
+                                            <td className="px-4 py-3 font-display font-bold text-ink">{r.room_number}</td>
+                                            <td className="px-4 py-3">{r.tenant_name || '-'}</td>
+                                            <td className="px-4 py-3">
                                                 {ps ? (
                                                     <div className="flex flex-col gap-0.5">
                                                         <span className={`inline-flex w-fit items-center px-2 py-0.5 rounded text-xs font-medium ${ps.cls}`}>
@@ -203,9 +202,9 @@ export default function Billing() {
                                                 )}
                                             </td>
                                             {/* Slip column */}
-                                            <td className="px-4 py-2">
+                                            <td className="px-4 py-3">
                                                 {!hasBill ? (
-                                                    <span className="text-slate-300 text-xs">-</span>
+                                                    <span className="text-ink-4 text-xs">-</span>
                                                 ) : slipStatus === 'pending' ? (
                                                     <div className="flex flex-col gap-1">
                                                         <span className="inline-flex w-fit items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
@@ -243,10 +242,10 @@ export default function Billing() {
                                                         )}
                                                     </div>
                                                 ) : (
-                                                    <span className="text-xs text-slate-400">ยังไม่มีสลิป</span>
+                                                    <span className="text-xs text-ink-4">ยังไม่มีสลิป</span>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-2 text-right">
+                                            <td className="px-4 py-3 text-right">
                                                 {hasBill ? (
                                                     <div className="flex flex-col items-end gap-0.5">
                                                         <span>฿ {fmtMoney(total)}</span>
@@ -260,7 +259,7 @@ export default function Billing() {
                                                     <span className="text-slate-400">-</span>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-2 text-right">
+                                            <td className="px-4 py-3 text-right">
                                                 <div className="flex flex-col items-end gap-0.5 text-xs">
                                                     {!isPropertyManager && (
                                                         <Link to={`/admin/billing/${r.room_id}/${month}/${year}`}
@@ -271,8 +270,8 @@ export default function Billing() {
                                                     {hasBill && (
                                                         <button onClick={() => togglePaid(b)}
                                                                 disabled={busyId === b.bill_id}
-                                                                className={`hover:underline disabled:opacity-50 ${
-                                                                    b.paid_at ? 'text-slate-500' : 'text-green-700'
+                                                                className={`font-semibold hover:underline disabled:opacity-50 ${
+                                                                    b.paid_at ? 'text-ink-3' : 'text-[#047857]'
                                                                 }`}>
                                                             {busyId === b.bill_id
                                                                 ? 'กำลังบันทึก...'
@@ -285,7 +284,7 @@ export default function Billing() {
                                     );
                                 })}
                                 {rooms.length === 0 && (
-                                    <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-400">ไม่มีห้องพัก</td></tr>
+                                    <tr><td colSpan={6} className="px-4 py-8 text-center text-ink-4">ไม่มีห้องพัก</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -305,20 +304,20 @@ export default function Billing() {
 
             {/* Slip viewer modal */}
             {slipModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 backdrop-blur-sm"
                      onClick={() => setSlipModal(null)}>
-                    <div className="relative max-w-lg w-full mx-4 bg-white rounded-xl p-4 shadow-xl"
+                    <div className="relative max-w-lg w-full mx-4 bg-white rounded-[20px] p-4 shadow-soft-lg border border-[color:var(--border)]"
                          onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-3">
-                            <h3 className="font-semibold text-slate-800">สลิปการชำระเงิน</h3>
+                            <h3 className="font-display font-bold text-ink">สลิปการชำระเงิน</h3>
                             <button onClick={() => setSlipModal(null)}
-                                    className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+                                    className="text-ink-3 hover:text-ink text-xl leading-none">×</button>
                         </div>
                         <img src={slipModal.url} alt="สลิปการชำระเงิน"
-                             className="w-full max-h-[70vh] object-contain rounded-lg border border-slate-100" />
+                             className="w-full max-h-[70vh] object-contain rounded-xl border border-[color:var(--border)]" />
                         <div className="flex justify-end mt-3">
                             <a href={slipModal.url} target="_blank" rel="noreferrer"
-                               className="text-sm text-brand-600 hover:underline">
+                               className="text-sm text-violet font-semibold hover:underline">
                                 เปิดในแท็บใหม่
                             </a>
                         </div>

@@ -20,35 +20,36 @@ export default function ForgotPassword() {
     };
 
     return (
-        <div className="min-h-screen grid place-items-center bg-gradient-to-br from-brand-600 to-brand-700 p-6">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
-                <h1 className="text-2xl font-bold text-slate-800 text-center">ลืมรหัสผ่าน</h1>
-                <p className="text-sm text-slate-500 text-center mt-1">
+        <div className="min-h-screen grid place-items-center app-bg p-6 relative overflow-hidden">
+            <div className="pointer-events-none absolute -top-24 -right-24 h-80 w-80 rounded-full bg-pink/30 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-32 -left-20 h-96 w-96 rounded-full bg-sky/30 blur-3xl" />
+            <div className="relative bg-white/80 backdrop-blur-xl rounded-[28px] shadow-soft-lg w-full max-w-md p-8 border border-[color:var(--border)]">
+                <h1 className="font-display text-2xl font-bold text-center"><span className="aurora-text">ลืมรหัสผ่าน</span></h1>
+                <p className="text-sm text-ink-3 text-center mt-1">
                     กรอกอีเมล / ชื่อผู้ใช้ / เลขบัตรประชาชน เพื่อรับลิงก์รีเซ็ตทางอีเมล
                 </p>
 
                 {done ? (
-                    <div className="mt-6 text-sm text-slate-700 space-y-3">
-                        <p className="bg-green-50 border border-green-200 text-green-800 rounded-md px-3 py-2">
+                    <div className="mt-6 text-sm text-ink-2 space-y-3">
+                        <p className="bg-[#d1fae5] border border-[#10b981]/30 text-[#047857] rounded-xl px-3 py-2">
                             ถ้าบัญชีนี้มีอยู่ในระบบและมีอีเมล จะได้รับลิงก์รีเซ็ตในอีกสักครู่
                         </p>
-                        <Link to="/login" className="text-brand-600 hover:underline">← กลับไปหน้าเข้าสู่ระบบ</Link>
+                        <Link to="/login" className="text-violet font-semibold hover:underline">← กลับไปหน้าเข้าสู่ระบบ</Link>
                     </div>
                 ) : (
                     <form onSubmit={submit} className="mt-6 space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-600">อีเมล / ชื่อผู้ใช้ / เลขบัตรประชาชน</label>
+                            <label className="block text-sm font-semibold text-ink-2 mb-1.5">อีเมล / ชื่อผู้ใช้ / เลขบัตรประชาชน</label>
                             <input type="text" required
-                                   className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-brand-500"
+                                   className="ui-input"
                                    value={identifier}
                                    onChange={(e) => setIdentifier(e.target.value)} />
                         </div>
-                        <button type="submit" disabled={busy}
-                                className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-md font-medium disabled:opacity-50">
+                        <button type="submit" disabled={busy} className="btn btn-primary w-full !py-3">
                             {busy ? 'กำลังส่ง...' : 'ส่งลิงก์รีเซ็ต'}
                         </button>
                         <div className="text-center text-sm">
-                            <Link to="/login" className="text-brand-600 hover:underline">← กลับไปหน้าเข้าสู่ระบบ</Link>
+                            <Link to="/login" className="text-violet font-semibold hover:underline">← กลับไปหน้าเข้าสู่ระบบ</Link>
                         </div>
                     </form>
                 )}

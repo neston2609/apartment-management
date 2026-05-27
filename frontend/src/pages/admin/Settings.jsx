@@ -113,17 +113,17 @@ export default function Settings() {
 
     return (
         <div className="max-w-3xl space-y-4">
-            <h1 className="text-2xl font-bold text-slate-800">ตั้งค่า</h1>
+            <h1 className="font-display text-3xl font-bold text-ink">ตั้งค่า</h1>
 
-            <div className="bg-white border border-slate-200 rounded-lg p-3 text-sm">
-                <label className="text-slate-600 mr-2">อพาร์ทเมนต์:</label>
+            <div className="ui-card p-3.5 text-sm">
+                <label className="text-ink-2 font-medium mr-2">อพาร์ทเมนต์:</label>
                 <select value={aptId} onChange={(e) => setAptId(e.target.value)}
-                        className="border border-slate-300 rounded-md px-2 py-1">
+                        className="ui-input !py-2 !w-auto inline-block">
                     {apts.map((a) => <option key={a.apartment_id} value={a.apartment_id}>{a.name}</option>)}
                 </select>
             </div>
 
-            <form onSubmit={submit} className="bg-white border border-slate-200 rounded-lg p-5 space-y-3 text-sm">
+            <form onSubmit={submit} className="ui-card p-5 space-y-3 text-sm">
                 <div className="grid grid-cols-2 gap-3">
                     <Field label="ราคาน้ำต่อหน่วย" type="number" step="0.01"
                            value={form.water_price_per_unit}
@@ -140,20 +140,20 @@ export default function Settings() {
                 </div>
 
                 {/* Payment & Late Fee */}
-                <div className="border-t border-slate-200 pt-3 mt-2">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-2">การชำระเงิน &amp; ค่าปรับ</h3>
+                <div className="border-t border-[color:var(--border)] pt-3 mt-2">
+                    <h3 className="font-display text-sm font-bold text-ink mb-2">การชำระเงิน &amp; ค่าปรับ</h3>
                     <div className="grid grid-cols-2 gap-3">
                         <label className="block">
-                            <span className="text-slate-600">วันครบกำหนดชำระ (ของทุกเดือน)</span>
+                            <span className="text-ink-2 font-semibold">วันครบกำหนดชำระ (ของทุกเดือน)</span>
                             <input type="number" min={1} max={31}
                                    placeholder="เช่น 5"
-                                   className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                                   className="ui-input mt-1 !py-2"
                                    value={form.payment_due_day ?? ''}
                                    onChange={(e) => {
                                        const v = e.target.value;
                                        setForm({ ...form, payment_due_day: v === '' ? null : parseInt(v, 10) });
                                    }} />
-                            <span className="text-xs text-slate-500 mt-0.5 block">
+                            <span className="text-xs text-ink-3 mt-0.5 block">
                                 เว้นว่างถ้ายังไม่กำหนด — สถานะจะแสดงเป็น "ออกบิลแล้ว" แทน
                             </span>
                         </label>
@@ -164,9 +164,9 @@ export default function Settings() {
                 </div>
 
                 {/* Bank Transfer Info */}
-                <div className="border-t border-slate-200 pt-3 mt-2">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-2">ข้อมูลการโอนเงิน</h3>
-                    <p className="text-xs text-slate-500 mb-2">
+                <div className="border-t border-[color:var(--border)] pt-3 mt-2">
+                    <h3 className="font-display text-sm font-bold text-ink mb-2">ข้อมูลการโอนเงิน</h3>
+                    <p className="text-xs text-ink-3 mb-2">
                         ข้อมูลนี้จะแสดงให้ผู้เช่าเห็นเมื่อต้องการชำระเงิน
                     </p>
                     <div className="grid grid-cols-1 gap-3">
@@ -186,49 +186,48 @@ export default function Settings() {
                 </div>
 
                 <label className="block">
-                    <span className="text-slate-600">ข้อความท้ายใบแจ้งหนี้</span>
-                    <textarea rows={3} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                    <span className="text-ink-2 font-semibold">ข้อความท้ายใบแจ้งหนี้</span>
+                    <textarea rows={3} className="ui-input mt-1 !py-2"
                               value={form.invoice_footer_text || ''}
                               onChange={(e) => setForm({ ...form, invoice_footer_text: e.target.value })} />
                 </label>
 
                 <label className="block">
                     <div className="flex items-center justify-between">
-                        <span className="text-slate-600">ข้อตกลงและเงื่อนไข (สัญญาเช่า)</span>
+                        <span className="text-ink-2 font-semibold">ข้อตกลงและเงื่อนไข (สัญญาเช่า)</span>
                         <button type="button" onClick={resetContractTerms}
                                 className="text-xs text-brand-600 hover:underline">
                             คืนค่าเริ่มต้น
                         </button>
                     </div>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-ink-4 mt-0.5">
                         แต่ละบรรทัดคือ 1 ข้อ — บรรทัดที่ปรากฏที่นี่จะถูกพิมพ์ลงใน PDF สัญญาเช่า
                     </p>
                     <textarea rows={12}
-                              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 font-mono text-[13px] leading-relaxed"
+                              className="ui-input mt-1 !py-2 font-mono text-[13px] leading-relaxed"
                               value={form.contract_terms || ''}
                               onChange={(e) => setForm({ ...form, contract_terms: e.target.value })} />
                 </label>
 
                 <div className="flex justify-end">
-                    <button type="submit" disabled={saving}
-                            className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md disabled:opacity-50">
+                    <button type="submit" disabled={saving} className="btn btn-primary">
                         {saving ? 'กำลังบันทึก...' : 'บันทึก'}
                     </button>
                 </div>
             </form>
 
             {/* QR Code Section — separate upload, not part of the main form */}
-            <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-3 text-sm">
-                <h3 className="text-sm font-semibold text-slate-700">QR Code สำหรับชำระเงิน</h3>
-                <p className="text-xs text-slate-500">อัปโหลดรูป QR Code พร้อมเพย์หรือ QR สำหรับโอนเงิน ผู้เช่าจะเห็นรูปนี้เมื่อกดชำระเงิน</p>
+            <div className="ui-card p-5 space-y-3 text-sm">
+                <h3 className="font-display text-sm font-bold text-ink">QR Code สำหรับชำระเงิน</h3>
+                <p className="text-xs text-ink-3">อัปโหลดรูป QR Code พร้อมเพย์หรือ QR สำหรับโอนเงิน ผู้เช่าจะเห็นรูปนี้เมื่อกดชำระเงิน</p>
 
                 <div className="flex flex-wrap items-start gap-4">
                     {displayQr && (
                         <div className="relative">
                             <img src={displayQr} alt="QR Code"
-                                 className="w-36 h-36 object-contain border border-slate-200 rounded-lg bg-white" />
+                                 className="w-36 h-36 object-contain border border-[color:var(--border)] rounded-2xl bg-white" />
                             {qrPreview && (
-                                <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[10px] px-1 rounded">
+                                <span className="absolute -top-1 -right-1 bg-orange text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
                                     ยังไม่ได้บันทึก
                                 </span>
                             )}
@@ -237,26 +236,26 @@ export default function Settings() {
 
                     <div className="flex-1 space-y-2">
                         <div className="flex flex-wrap gap-2">
-                            <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-md text-slate-700 text-xs">
+                            <label className="btn btn-ghost cursor-pointer !text-xs !py-1.5">
                                 เลือกรูป QR Code
                                 <input ref={qrInputRef} type="file" accept="image/*" className="hidden"
                                        onChange={handleQrFileChange} />
                             </label>
                             {qrFile && (
                                 <button type="button" onClick={uploadQr} disabled={qrUploading}
-                                        className="bg-brand-600 hover:bg-brand-700 text-white text-xs px-3 py-1.5 rounded-md disabled:opacity-50">
+                                        className="btn btn-primary !text-xs !py-1.5">
                                     {qrUploading ? 'กำลังอัปโหลด...' : 'บันทึก QR Code'}
                                 </button>
                             )}
                             {savedQrUrl && !qrFile && (
                                 <button type="button" onClick={removeQr}
-                                        className="bg-red-50 hover:bg-red-100 text-red-700 text-xs px-3 py-1.5 rounded-md">
+                                        className="btn !text-xs !py-1.5 bg-[#fee2e2] text-[#b91c1c]">
                                     ลบ QR Code
                                 </button>
                             )}
                         </div>
                         {!displayQr && (
-                            <p className="text-xs text-slate-400">ยังไม่มี QR Code</p>
+                            <p className="text-xs text-ink-4">ยังไม่มี QR Code</p>
                         )}
                     </div>
                 </div>
@@ -268,8 +267,8 @@ export default function Settings() {
 function Field({ label, value, onChange, ...rest }) {
     return (
         <label className="block">
-            <span className="text-slate-600">{label}</span>
-            <input className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+            <span className="text-ink-2 font-semibold">{label}</span>
+            <input className="ui-input mt-1 !py-2"
                    value={value} onChange={(e) => onChange(e.target.value)} {...rest} />
         </label>
     );

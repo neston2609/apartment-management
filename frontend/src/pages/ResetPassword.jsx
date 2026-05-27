@@ -27,35 +27,36 @@ export default function ResetPassword() {
     };
 
     return (
-        <div className="min-h-screen grid place-items-center bg-gradient-to-br from-brand-600 to-brand-700 p-6">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
-                <h1 className="text-2xl font-bold text-slate-800 text-center">ตั้งรหัสผ่านใหม่</h1>
+        <div className="min-h-screen grid place-items-center app-bg p-6 relative overflow-hidden">
+            <div className="pointer-events-none absolute -top-24 -right-24 h-80 w-80 rounded-full bg-violet/30 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-32 -left-20 h-96 w-96 rounded-full bg-sky/30 blur-3xl" />
+            <div className="relative bg-white/80 backdrop-blur-xl rounded-[28px] shadow-soft-lg w-full max-w-md p-8 border border-[color:var(--border)]">
+                <h1 className="font-display text-2xl font-bold text-center"><span className="aurora-text">ตั้งรหัสผ่านใหม่</span></h1>
                 {!token ? (
-                    <div className="mt-6 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-3">
+                    <div className="mt-6 text-sm text-[#b91c1c] bg-[#fee2e2] border border-[#ef4444]/30 rounded-xl p-3">
                         ลิงก์ไม่ถูกต้อง — ขาดพารามิเตอร์ token
                     </div>
                 ) : (
                     <form onSubmit={submit} className="mt-6 space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-600">รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)</label>
+                            <label className="block text-sm font-semibold text-ink-2 mb-1.5">รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)</label>
                             <input type="password" required
-                                   className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+                                   className="ui-input"
                                    value={pwd} onChange={(e) => setPwd(e.target.value)} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-slate-600">ยืนยันรหัสผ่านใหม่</label>
+                            <label className="block text-sm font-semibold text-ink-2 mb-1.5">ยืนยันรหัสผ่านใหม่</label>
                             <input type="password" required
-                                   className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+                                   className="ui-input"
                                    value={confirm} onChange={(e) => setConfirm(e.target.value)} />
                         </div>
-                        <button type="submit" disabled={busy}
-                                className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-md font-medium disabled:opacity-50">
+                        <button type="submit" disabled={busy} className="btn btn-primary w-full !py-3">
                             {busy ? 'กำลังบันทึก...' : 'ตั้งรหัสผ่านใหม่'}
                         </button>
                     </form>
                 )}
                 <div className="text-center text-sm mt-4">
-                    <Link to="/login" className="text-brand-600 hover:underline">← กลับไปหน้าเข้าสู่ระบบ</Link>
+                    <Link to="/login" className="text-violet font-semibold hover:underline">← กลับไปหน้าเข้าสู่ระบบ</Link>
                 </div>
             </div>
         </div>
