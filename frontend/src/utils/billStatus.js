@@ -31,7 +31,13 @@ export function paymentStatus(bill, now = new Date()) {
                  cls: 'bg-amber-100 text-amber-800' };
     }
     const days = Math.ceil((now.getTime() - dueDate.getTime()) / (24 * 60 * 60 * 1000));
-    const lateFee = +(Number(bill.late_fee_per_day || 0) * days).toFixed(2);
+    // Late-fee charging can be switched off per apartment. When disabled the bill
+    // is still shown as overdue, but no fee is computed. Treat as enabled unless
+    // explicitly false (for backward compatibility with bills lacking the flag).
+    const feeEnabled = !(bill.late_fee_enabled === false
+        || bill.late_fee_enabled === 'false' || bill.late_fee_enabled === 0);
+    const rate = feeEnabled ? Number(bill.late_fee_per_day || 0) : 0;
+    const lateFee = +(rate * days).toFixed(2);
     return {
         kind: 'overdue', label: 'เกินกำหนด',
         cls: 'bg-red-100 text-red-800',

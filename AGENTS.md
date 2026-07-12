@@ -1,6 +1,6 @@
-# CLAUDE.md — Apartment Management System
+# AGENTS.md — Apartment Management System
 
-This file is the **complete requirement & design specification** for a working full-stack apartment management application. It is intended to be self-contained: an LLM coding agent (e.g. Claude Cowork) should be able to read this file and reproduce the system end-to-end without needing the original codebase.
+This file is the **complete requirement & design specification** for a working full-stack apartment management application. It is intended to be self-contained: an LLM coding agent (e.g. Codex Cowork) should be able to read this file and reproduce the system end-to-end without needing the original codebase.
 
 The original implementation lives at `G:\ollama\apartment-management-system` (Windows host). This document describes what to build, not how the existing files happen to be arranged.
 
@@ -60,7 +60,7 @@ brand: { 50: '#eff6ff', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' }
 
 ```
 apartment-management-system/
-├── CLAUDE.md
+├── AGENTS.md
 ├── README.md, DEPLOY.md
 ├── package.json                      # root scripts via concurrently
 ├── docker-compose.yml
@@ -243,7 +243,6 @@ CREATE TABLE expense_settings (
     contract_terms              TEXT DEFAULT '', -- per-apartment override; one rule per line
     payment_due_day             INTEGER,         -- day of month rent is due (1-31), nullable
     late_fee_per_day            DECIMAL(10,2) NOT NULL DEFAULT 0, -- THB / day late
-    late_fee_enabled            BOOLEAN NOT NULL DEFAULT TRUE,     -- per-apartment late-fee on/off switch
     created_at                  TIMESTAMPTZ DEFAULT NOW(),
     updated_at                  TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(apartment_id)
@@ -690,8 +689,6 @@ nodemailer.createTransport({
 
     Due date is built as `Date(bill.year, bill.month - 1, min(payment_due_day, last_day_of_month), 23:59:59)`.
     `late_fee` is shown inline next to both the status pill and the total on the Billing page; it is **not** persisted into `total_cost`.
-
-    **Late-fee on/off switch** — `expense_settings.late_fee_enabled` (BOOLEAN, default TRUE; migration `005_add_late_fee_toggle.sql`) is a per-apartment toggle exposed on the Settings page ("เปิดเก็บค่าปรับเมื่อเกินกำหนด"). When FALSE, `paymentStatus()` still returns the **"เกินกำหนด"** status for overdue bills but sets `late_fee = 0`, so no penalty is computed or displayed. The flag is joined into the bill list + `tenant/me` responses and treated as enabled unless explicitly `false` (backward-compatible with rows/bills lacking it).
 
 ---
 

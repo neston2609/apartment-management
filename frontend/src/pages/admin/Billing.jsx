@@ -193,7 +193,7 @@ export default function Billing() {
                                                         </span>
                                                         {ps.kind === 'overdue' && (
                                                             <span className="text-[11px] text-red-700">
-                                                                เลย {ps.days_overdue} วัน · ค่าปรับ ฿ {fmtMoney(ps.late_fee)}
+                                                                เลย {ps.days_overdue} วัน{ps.late_fee > 0 && ` · ค่าปรับ ฿ ${fmtMoney(ps.late_fee)}`}
                                                             </span>
                                                         )}
                                                     </div>

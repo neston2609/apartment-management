@@ -142,6 +142,15 @@ export default function Settings() {
                 {/* Payment & Late Fee */}
                 <div className="border-t border-[color:var(--border)] pt-3 mt-2">
                     <h3 className="font-display text-sm font-bold text-ink mb-2">การชำระเงิน &amp; ค่าปรับ</h3>
+
+                    <label className="flex items-center gap-2 mb-3 cursor-pointer select-none">
+                        <input type="checkbox"
+                               className="h-4 w-4 accent-brand-600"
+                               checked={form.late_fee_enabled !== false}
+                               onChange={(e) => setForm({ ...form, late_fee_enabled: e.target.checked })} />
+                        <span className="text-ink-2 font-semibold">เปิดเก็บค่าปรับเมื่อเกินกำหนด</span>
+                    </label>
+
                     <div className="grid grid-cols-2 gap-3">
                         <label className="block">
                             <span className="text-ink-2 font-semibold">วันครบกำหนดชำระ (ของทุกเดือน)</span>
@@ -158,9 +167,15 @@ export default function Settings() {
                             </span>
                         </label>
                         <Field label="ค่าปรับต่อวัน (บาท)" type="number" step="0.01" min={0}
+                               disabled={form.late_fee_enabled === false}
                                value={form.late_fee_per_day ?? 0}
                                onChange={(v) => setForm({ ...form, late_fee_per_day: parseFloat(v) || 0 })} />
                     </div>
+                    {form.late_fee_enabled === false && (
+                        <span className="text-xs text-ink-3 mt-1 block">
+                            ปิดอยู่ — บิลที่เกินกำหนดจะยังแสดงสถานะ "เกินกำหนด" แต่จะไม่คิดค่าปรับ
+                        </span>
+                    )}
                 </div>
 
                 {/* Bank Transfer Info */}

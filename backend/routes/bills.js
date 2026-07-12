@@ -58,7 +58,7 @@ router.get('/', authenticate, adminOnly, async (req, res) => {
             SELECT b.*,
                    r.room_number, r.apartment_id, r.rental_price, r.status,
                    t.full_name AS tenant_name,
-                   s.payment_due_day, s.late_fee_per_day
+                   s.payment_due_day, s.late_fee_per_day, s.late_fee_enabled
             FROM bills b
             JOIN rooms r ON r.room_id = b.room_id
             LEFT JOIN tenants t ON t.room_id = r.room_id AND t.is_active = TRUE
@@ -320,7 +320,7 @@ router.get('/tenant/me', authenticate, async (req, res) => {
     try {
         const { rows } = await db.query(`
             SELECT b.*, r.room_number,
-                   s.payment_due_day, s.late_fee_per_day,
+                   s.payment_due_day, s.late_fee_per_day, s.late_fee_enabled,
                    s.bank_name, s.bank_account_number, s.bank_account_name,
                    s.qr_code_path
             FROM bills b

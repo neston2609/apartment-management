@@ -39,6 +39,7 @@ router.get('/:apartment_id', async (req, res) => {
                     contract_terms: DEFAULT_CONTRACT_TERMS_TEXT,
                     payment_due_day: null,
                     late_fee_per_day: 0,
+                    late_fee_enabled: true,
                     bank_name: '',
                     bank_account_number: '',
                     bank_account_name: '',
@@ -66,7 +67,7 @@ router.put('/:apartment_id', fullAdmin, async (req, res) => {
             water_price_per_unit, water_max_units,
             electricity_price_per_unit, electricity_max_units,
             invoice_footer_text, contract_terms,
-            payment_due_day, late_fee_per_day,
+            payment_due_day, late_fee_per_day, late_fee_enabled,
             bank_name, bank_account_number, bank_account_name,
         } = req.body;
 
@@ -76,15 +77,18 @@ router.put('/:apartment_id', fullAdmin, async (req, res) => {
             if (Number.isFinite(d) && d >= 1 && d <= 31) dueDay = d;
         }
         const lateFee = Number(late_fee_per_day) || 0;
+        // Default to enabled unless explicitly turned off (false / 'false' / 0).
+        const lateFeeEnabled = !(late_fee_enabled === false
+            || late_fee_enabled === 'false' || late_fee_enabled === 0);
 
         const { rows } = await db.query(
             `INSERT INTO expense_settings
              (apartment_id, water_price_per_unit, water_max_units,
               electricity_price_per_unit, electricity_max_units,
               invoice_footer_text, contract_terms,
-              payment_due_day, late_fee_per_day,
+              payment_due_day, late_fee_per_day, late_fee_enabled,
               bank_name, bank_account_number, bank_account_name)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
              ON CONFLICT (apartment_id) DO UPDATE SET
                  water_price_per_unit       = EXCLUDED.water_price_per_unit,
                  water_max_units            = EXCLUDED.water_max_units,
@@ -94,6 +98,7 @@ router.put('/:apartment_id', fullAdmin, async (req, res) => {
                  contract_terms             = EXCLUDED.contract_terms,
                  payment_due_day            = EXCLUDED.payment_due_day,
                  late_fee_per_day           = EXCLUDED.late_fee_per_day,
+                 late_fee_enabled           = EXCLUDED.late_fee_enabled,
                  bank_name                  = EXCLUDED.bank_name,
                  bank_account_number        = EXCLUDED.bank_account_number,
                  bank_account_name          = EXCLUDED.bank_account_name,
@@ -103,7 +108,7 @@ router.put('/:apartment_id', fullAdmin, async (req, res) => {
              water_price_per_unit ?? 0, water_max_units ?? 9999,
              electricity_price_per_unit ?? 0, electricity_max_units ?? 9999,
              invoice_footer_text ?? '', contract_terms ?? '',
-             dueDay, lateFee,
+             dueDay, lateFee, lateFeeEnabled,
              (bank_name || '').trim(),
              (bank_account_number || '').trim(),
              (bank_account_name || '').trim()]

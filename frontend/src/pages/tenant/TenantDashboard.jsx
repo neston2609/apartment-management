@@ -48,7 +48,7 @@ export default function TenantDashboard() {
                                     </span>
                                     {ps.kind === 'overdue' && (
                                         <span className="text-xs text-white/90">
-                                            เลย {ps.days_overdue} วัน · ค่าปรับ ฿ {fmtMoney(ps.late_fee)} → ยอดที่ต้องชำระ ฿ {fmtMoney(grand)}
+                                            เลย {ps.days_overdue} วัน{ps.late_fee > 0 && ` · ค่าปรับ ฿ ${fmtMoney(ps.late_fee)} → ยอดที่ต้องชำระ ฿ ${fmtMoney(grand)}`}
                                         </span>
                                     )}
                                 </div>

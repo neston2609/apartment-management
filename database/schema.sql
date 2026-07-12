@@ -87,6 +87,7 @@ CREATE TABLE expense_settings (
     contract_terms              TEXT DEFAULT '',
     payment_due_day             INTEGER,
     late_fee_per_day            DECIMAL(10,2) NOT NULL DEFAULT 0,
+    late_fee_enabled            BOOLEAN NOT NULL DEFAULT TRUE,
     created_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(apartment_id)
