@@ -64,7 +64,7 @@ export default function BillingForm() {
     }, [roomId, month, year]);
 
     const calc = () => {
-        if (!settings) return { water_cost: 0, electricity_cost: 0, total: 0, w_usage: 0, e_usage: 0 };
+        if (!settings) return { water_cost: 0, electricity_cost: 0, common_fee: 0, total: 0, w_usage: 0, e_usage: 0 };
         const w_usage = form.rollover_water
             ? (Number(settings.water_max_units) - Number(form.water_units_last)) + Number(form.water_units_current)
             : Number(form.water_units_current) - Number(form.water_units_last);
@@ -73,8 +73,12 @@ export default function BillingForm() {
             : Number(form.electricity_units_current) - Number(form.electricity_units_last);
         const water_cost       = w_usage * Number(settings.water_price_per_unit);
         const electricity_cost = e_usage * Number(settings.electricity_price_per_unit);
-        const total = water_cost + electricity_cost + Number(form.rent_cost) + Number(form.other_cost);
-        return { water_cost, electricity_cost, total, w_usage, e_usage };
+        // Common-area fee = rate × electricity usage, only when enabled.
+        const commonEnabled = settings.common_fee_enabled === true;
+        const commonRate = commonEnabled ? Number(settings.common_fee_per_unit) || 0 : 0;
+        const common_fee = e_usage * commonRate;
+        const total = water_cost + electricity_cost + common_fee + Number(form.rent_cost) + Number(form.other_cost);
+        return { water_cost, electricity_cost, common_fee, total, w_usage, e_usage, commonEnabled, commonRate };
     };
 
     const submit = async (e) => {
@@ -169,6 +173,15 @@ export default function BillingForm() {
                                 onChange={(v) => setForm({ ...form, other_cost: v })} />
                     </div>
                 </Section>
+
+                {c.commonEnabled && (
+                    <div className="flex items-center justify-between text-sm px-1">
+                        <span className="text-ink-2">
+                            ค่าบริการไฟส่วนกลาง (฿ {fmtMoney(c.commonRate)}/หน่วย × {Math.trunc(c.e_usage)} หน่วย)
+                        </span>
+                        <span className="font-semibold text-ink">฿ {fmtMoney(c.common_fee)}</span>
+                    </div>
+                )}
 
                 <div className="bg-violet-soft border border-violet/20 rounded-2xl p-4 flex items-center justify-between">
                     <span className="text-ink-2 font-semibold">รวมทั้งสิ้น</span>

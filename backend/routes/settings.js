@@ -35,6 +35,8 @@ router.get('/:apartment_id', async (req, res) => {
                     water_max_units: 9999,
                     electricity_price_per_unit: 0,
                     electricity_max_units: 9999,
+                    common_fee_per_unit: 0,
+                    common_fee_enabled: false,
                     invoice_footer_text: '',
                     contract_terms: DEFAULT_CONTRACT_TERMS_TEXT,
                     payment_due_day: null,
@@ -66,6 +68,7 @@ router.put('/:apartment_id', fullAdmin, async (req, res) => {
         const {
             water_price_per_unit, water_max_units,
             electricity_price_per_unit, electricity_max_units,
+            common_fee_per_unit, common_fee_enabled,
             invoice_footer_text, contract_terms,
             payment_due_day, late_fee_per_day, late_fee_enabled,
             bank_name, bank_account_number, bank_account_name,
@@ -80,20 +83,27 @@ router.put('/:apartment_id', fullAdmin, async (req, res) => {
         // Default to enabled unless explicitly turned off (false / 'false' / 0).
         const lateFeeEnabled = !(late_fee_enabled === false
             || late_fee_enabled === 'false' || late_fee_enabled === 0);
+        const commonFeePerUnit = Number(common_fee_per_unit) || 0;
+        // Common-area fee is opt-in: enabled only when explicitly turned on.
+        const commonFeeEnabled = common_fee_enabled === true
+            || common_fee_enabled === 'true' || common_fee_enabled === 1;
 
         const { rows } = await db.query(
             `INSERT INTO expense_settings
              (apartment_id, water_price_per_unit, water_max_units,
               electricity_price_per_unit, electricity_max_units,
+              common_fee_per_unit, common_fee_enabled,
               invoice_footer_text, contract_terms,
               payment_due_day, late_fee_per_day, late_fee_enabled,
               bank_name, bank_account_number, bank_account_name)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
              ON CONFLICT (apartment_id) DO UPDATE SET
                  water_price_per_unit       = EXCLUDED.water_price_per_unit,
                  water_max_units            = EXCLUDED.water_max_units,
                  electricity_price_per_unit = EXCLUDED.electricity_price_per_unit,
                  electricity_max_units      = EXCLUDED.electricity_max_units,
+                 common_fee_per_unit        = EXCLUDED.common_fee_per_unit,
+                 common_fee_enabled         = EXCLUDED.common_fee_enabled,
                  invoice_footer_text        = EXCLUDED.invoice_footer_text,
                  contract_terms             = EXCLUDED.contract_terms,
                  payment_due_day            = EXCLUDED.payment_due_day,
@@ -107,6 +117,7 @@ router.put('/:apartment_id', fullAdmin, async (req, res) => {
             [id,
              water_price_per_unit ?? 0, water_max_units ?? 9999,
              electricity_price_per_unit ?? 0, electricity_max_units ?? 9999,
+             commonFeePerUnit, commonFeeEnabled,
              invoice_footer_text ?? '', contract_terms ?? '',
              dueDay, lateFee, lateFeeEnabled,
              (bank_name || '').trim(),

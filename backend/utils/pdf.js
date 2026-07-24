@@ -181,8 +181,13 @@ function drawInvoiceThai(doc, b) {
         { label: 'ค่าไฟ', last: intStr(b.electricity_units_last), cur: intStr(b.electricity_units_current),
           units: intStr(eUsage), rate: intStr(b.electricity_price_per_unit), amount: intStr(b.electricity_cost) },
         { label: 'ค่าเช่าห้อง',         last: '', cur: '', units: '', rate: '', amount: intStr(b.rent_cost) },
-        { label: 'ค่าโทรศัพท์ และอื่นๆ', last: '', cur: '', units: '', rate: '', amount: intStr(b.other_cost) },
     ];
+    // Common-area electricity fee — only shown when it was actually charged.
+    if (Number(b.common_fee) > 0) {
+        dataRows.push({ label: 'ค่าบริการไฟส่วนกลาง', last: '', cur: '', units: '', rate: '',
+                        amount: intStr(b.common_fee) });
+    }
+    dataRows.push({ label: 'ค่าโทรศัพท์ และอื่นๆ', last: '', cur: '', units: '', rate: '', amount: intStr(b.other_cost) });
 
     const rowH = 26;
     doc.fillColor('black').font('thai').fontSize(11);
@@ -275,8 +280,13 @@ function drawInvoiceEnglish(doc, b) {
         { label: 'Electricity', last: intStr(b.electricity_units_last), cur: intStr(b.electricity_units_current),
           units: intStr(eUsage), rate: intStr(b.electricity_price_per_unit), amount: intStr(b.electricity_cost) },
         { label: 'Room rent', last: '', cur: '', units: '', rate: '', amount: intStr(b.rent_cost) },
-        { label: 'Other',     last: '', cur: '', units: '', rate: '', amount: intStr(b.other_cost) },
     ];
+    // Common-area electricity fee — only shown when it was actually charged.
+    if (Number(b.common_fee) > 0) {
+        rows.push({ label: 'Common area', last: '', cur: '', units: '', rate: '',
+                    amount: intStr(b.common_fee) });
+    }
+    rows.push({ label: 'Other', last: '', cur: '', units: '', rate: '', amount: intStr(b.other_cost) });
     const rowH = 26;
     doc.fillColor('black').font('reg').fontSize(11);
     rows.forEach((r) => {

@@ -78,6 +78,7 @@ export default function Dashboard() {
             water:   sum('water_cost'),
             elec:    sum('electricity_cost'),
             rent:    sum('rent_cost'),
+            common:  sum('common_fee'),
             other:   sum('other_cost'),
             total:   sum('total_cost'),
             count:   filteredBills.length,
@@ -170,11 +171,12 @@ export default function Dashboard() {
                 </div>
 
                 {/* Breakdown */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5 relative">
-                    <BreakdownCard label="ค่าน้ำ"       value={breakdown.water} total={breakdown.total} color="bg-grad-cyan" />
-                    <BreakdownCard label="ค่าไฟ"        value={breakdown.elec}  total={breakdown.total} color="bg-grad-sunset" />
-                    <BreakdownCard label="ค่าเช่าห้อง"  value={breakdown.rent}  total={breakdown.total} color="bg-grad-mint" />
-                    <BreakdownCard label="รายได้อื่น ๆ" value={breakdown.other} total={breakdown.total} color="bg-grad-pink" />
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-5 relative">
+                    <BreakdownCard label="ค่าน้ำ"       value={breakdown.water}  total={breakdown.total} color="bg-grad-cyan" />
+                    <BreakdownCard label="ค่าไฟ"        value={breakdown.elec}   total={breakdown.total} color="bg-grad-sunset" />
+                    <BreakdownCard label="ค่าเช่าห้อง"  value={breakdown.rent}   total={breakdown.total} color="bg-grad-mint" />
+                    <BreakdownCard label="ไฟส่วนกลาง"   value={breakdown.common} total={breakdown.total} color="bg-grad-cyan" />
+                    <BreakdownCard label="รายได้อื่น ๆ" value={breakdown.other}  total={breakdown.total} color="bg-grad-pink" />
                 </div>
             </div>
 

@@ -17,6 +17,9 @@ function slipUrl(req, slip_path) {
 }
 
 // ---------- Helper: compute usage + cost ----------
+// Common-area fee (ค่าบริการไฟส่วนกลาง) is charged per electricity unit the
+// room consumes: common_fee = common_fee_per_unit × elec_usage. It is only
+// charged when the apartment has common_fee_enabled = TRUE.
 function computeBill(meter, settings, rentCost, otherCost = 0) {
     const wMax = Number(settings.water_max_units);
     const eMax = Number(settings.electricity_max_units);
@@ -31,13 +34,18 @@ function computeBill(meter, settings, rentCost, otherCost = 0) {
     const water_usage = meter.rollover_water       ? (wMax - wl) + wc : wc - wl;
     const elec_usage  = meter.rollover_electricity ? (eMax - el) + ec : ec - el;
 
+    const commonEnabled = settings.common_fee_enabled === true
+        || settings.common_fee_enabled === 'true' || settings.common_fee_enabled === 1;
+    const commonRate = commonEnabled ? Number(settings.common_fee_per_unit) || 0 : 0;
+
     const water_cost       = +(water_usage * wp).toFixed(2);
     const electricity_cost = +(elec_usage  * ep).toFixed(2);
+    const common_fee       = +(elec_usage * commonRate).toFixed(2);
     const rent             = Number(rentCost) || 0;
     const other            = Number(otherCost) || 0;
-    const total_cost       = +(water_cost + electricity_cost + rent + other).toFixed(2);
+    const total_cost       = +(water_cost + electricity_cost + common_fee + rent + other).toFixed(2);
 
-    return { water_usage, elec_usage, water_cost, electricity_cost, total_cost };
+    return { water_usage, elec_usage, water_cost, electricity_cost, common_fee, total_cost };
 }
 
 // ---------- List bills ----------
@@ -176,18 +184,19 @@ router.post('/', authenticate, adminOnly, fullAdmin, async (req, res) => {
         // paid_at on conflict only when still unpaid (never clear an existing one).
         const { rows } = await client.query(
             `INSERT INTO bills
-             (room_id, month, year, water_cost, electricity_cost, rent_cost, other_cost, total_cost, paid_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+             (room_id, month, year, water_cost, electricity_cost, rent_cost, common_fee, other_cost, total_cost, paid_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
              ON CONFLICT (room_id, month, year) DO UPDATE SET
                  water_cost       = EXCLUDED.water_cost,
                  electricity_cost = EXCLUDED.electricity_cost,
                  rent_cost        = EXCLUDED.rent_cost,
+                 common_fee       = EXCLUDED.common_fee,
                  other_cost       = EXCLUDED.other_cost,
                  total_cost       = EXCLUDED.total_cost,
-                 paid_at          = CASE WHEN $10 THEN COALESCE(bills.paid_at, $9) ELSE bills.paid_at END,
+                 paid_at          = CASE WHEN $11 THEN COALESCE(bills.paid_at, $10) ELSE bills.paid_at END,
                  updated_at = NOW()
              RETURNING *`,
-            [room_id, month, year, calc.water_cost, calc.electricity_cost, rent, other, calc.total_cost,
+            [room_id, month, year, calc.water_cost, calc.electricity_cost, rent, calc.common_fee, other, calc.total_cost,
              autoPaid ? new Date() : null, autoPaid]
         );
 
@@ -261,12 +270,12 @@ router.put('/:id', authenticate, adminOnly, fullAdmin, async (req, res) => {
 
         const { rows } = await client.query(
             `UPDATE bills
-             SET water_cost = $1, electricity_cost = $2, rent_cost = $3, other_cost = $4,
-                 total_cost = $5,
-                 paid_at = CASE WHEN $7 THEN COALESCE(paid_at, $8) ELSE paid_at END,
+             SET water_cost = $1, electricity_cost = $2, rent_cost = $3, common_fee = $4,
+                 other_cost = $5, total_cost = $6,
+                 paid_at = CASE WHEN $8 THEN COALESCE(paid_at, $9) ELSE paid_at END,
                  updated_at = NOW()
-             WHERE bill_id = $6 RETURNING *`,
-            [calc.water_cost, calc.electricity_cost, rent, other, calc.total_cost, id,
+             WHERE bill_id = $7 RETURNING *`,
+            [calc.water_cost, calc.electricity_cost, rent, calc.common_fee, other, calc.total_cost, id,
              autoPaid, autoPaid ? new Date() : null]
         );
 
@@ -447,6 +456,12 @@ router.post('/import', authenticate, adminOnly, fullAdmin, async (req, res) => {
             const eCost  = +(eUsage * Number(settings.electricity_price_per_unit)).toFixed(2);
             const rent   = Number(room.rental_price) || 0;
 
+            // Common-area electricity fee = rate × electricity usage (when enabled)
+            const commonEnabled = settings.common_fee_enabled === true
+                || settings.common_fee_enabled === 'true' || settings.common_fee_enabled === 1;
+            const commonRate = commonEnabled ? Number(settings.common_fee_per_unit) || 0 : 0;
+            const commonFee  = +(eUsage * commonRate).toFixed(2);
+
             // Existing bill & meter for this room/month/year
             const existingBill = (await client.query(
                 `SELECT bill_id, other_cost FROM bills WHERE room_id = $1 AND month = $2 AND year = $3`,
@@ -454,7 +469,7 @@ router.post('/import', authenticate, adminOnly, fullAdmin, async (req, res) => {
             )).rows[0];
 
             const other = existingBill ? Number(existingBill.other_cost) : 0;
-            const total = +(wCost + eCost + rent + other).toFixed(2);
+            const total = +(wCost + eCost + commonFee + rent + other).toFixed(2);
 
             // Upsert meter_readings (overwrite current; preserve last from prior or compute)
             await client.query(
@@ -477,16 +492,17 @@ router.post('/import', authenticate, adminOnly, fullAdmin, async (req, res) => {
             const autoPaid = room.status !== 'occupied';
             await client.query(
                 `INSERT INTO bills
-                 (room_id, month, year, water_cost, electricity_cost, rent_cost, other_cost, total_cost, paid_at)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                 (room_id, month, year, water_cost, electricity_cost, rent_cost, common_fee, other_cost, total_cost, paid_at)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
                  ON CONFLICT (room_id, month, year) DO UPDATE SET
                      water_cost       = EXCLUDED.water_cost,
                      electricity_cost = EXCLUDED.electricity_cost,
                      rent_cost        = EXCLUDED.rent_cost,
+                     common_fee       = EXCLUDED.common_fee,
                      total_cost       = EXCLUDED.total_cost,
-                     paid_at          = CASE WHEN $10 THEN COALESCE(bills.paid_at, $9) ELSE bills.paid_at END,
+                     paid_at          = CASE WHEN $11 THEN COALESCE(bills.paid_at, $10) ELSE bills.paid_at END,
                      updated_at = NOW()`,
-                [room.room_id, month, year, wCost, eCost, rent, other, total,
+                [room.room_id, month, year, wCost, eCost, rent, commonFee, other, total,
                  autoPaid ? new Date() : null, autoPaid]
             );
 
@@ -494,7 +510,7 @@ router.post('/import', authenticate, adminOnly, fullAdmin, async (req, res) => {
             items.push({
                 room_no: roomNo, water_last: wLast, water_current: water, water_usage: wUsage, water_cost: wCost,
                 elec_last: eLast, elec_current: elec, elec_usage: eUsage, elec_cost: eCost,
-                rent, other, total, action: existingBill ? 'updated' : 'created',
+                common_fee: commonFee, rent, other, total, action: existingBill ? 'updated' : 'created',
             });
         }
 

@@ -83,6 +83,8 @@ CREATE TABLE expense_settings (
     water_max_units             INTEGER NOT NULL DEFAULT 9999,
     electricity_price_per_unit  DECIMAL(10,2) NOT NULL DEFAULT 0,
     electricity_max_units       INTEGER NOT NULL DEFAULT 9999,
+    common_fee_per_unit         DECIMAL(10,2) NOT NULL DEFAULT 0,      -- ค่าบริการไฟส่วนกลาง: rate per electricity unit
+    common_fee_enabled          BOOLEAN NOT NULL DEFAULT FALSE,        -- charge common-area fee on/off
     invoice_footer_text         TEXT DEFAULT '',
     contract_terms              TEXT DEFAULT '',
     payment_due_day             INTEGER,
@@ -123,6 +125,7 @@ CREATE TABLE bills (
     water_cost       DECIMAL(10,2) NOT NULL DEFAULT 0,
     electricity_cost DECIMAL(10,2) NOT NULL DEFAULT 0,
     rent_cost        DECIMAL(10,2) NOT NULL DEFAULT 0,
+    common_fee       DECIMAL(10,2) NOT NULL DEFAULT 0,  -- ค่าบริการไฟส่วนกลาง = rate × elec usage
     other_cost       DECIMAL(10,2) NOT NULL DEFAULT 0,
     total_cost       DECIMAL(10,2) NOT NULL DEFAULT 0,
     paid_at          TIMESTAMP WITH TIME ZONE,

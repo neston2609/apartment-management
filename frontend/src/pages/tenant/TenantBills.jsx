@@ -114,6 +114,7 @@ export default function TenantBills() {
                             <th className="!text-right">ค่าน้ำ</th>
                             <th className="!text-right">ค่าไฟ</th>
                             <th className="!text-right">ค่าเช่า</th>
+                            <th className="!text-right">ไฟส่วนกลาง</th>
                             <th className="!text-right">อื่น ๆ</th>
                             <th className="!text-right">รวม</th>
                             <th></th>
@@ -163,6 +164,7 @@ export default function TenantBills() {
                                     <td className="px-4 py-3 text-right font-mono">{fmtMoney(b.water_cost)}</td>
                                     <td className="px-4 py-3 text-right font-mono">{fmtMoney(b.electricity_cost)}</td>
                                     <td className="px-4 py-3 text-right font-mono">{fmtMoney(b.rent_cost)}</td>
+                                    <td className="px-4 py-3 text-right font-mono">{fmtMoney(b.common_fee)}</td>
                                     <td className="px-4 py-3 text-right font-mono">{fmtMoney(b.other_cost)}</td>
                                     <td className="px-4 py-3 text-right font-bold text-ink">
                                         <div className="flex flex-col items-end gap-0.5">
@@ -193,7 +195,7 @@ export default function TenantBills() {
                             );
                         })}
                         {visible.length === 0 && (
-                            <tr><td colSpan={8} className="px-4 py-8 text-center text-ink-4">
+                            <tr><td colSpan={9} className="px-4 py-8 text-center text-ink-4">
                                 ไม่มีใบแจ้งหนี้สำหรับปีนี้
                             </td></tr>
                         )}
@@ -253,6 +255,12 @@ function PaymentModal({ bill, slipFile, slipPreview, uploading, slipInputRef, on
                             <span className="text-ink-3">ค่าเช่า</span>
                             <span className="font-mono">฿ {fmtMoney(bill.rent_cost)}</span>
                         </div>
+                        {Number(bill.common_fee) > 0 && (
+                            <div className="flex justify-between">
+                                <span className="text-ink-3">ค่าบริการไฟส่วนกลาง</span>
+                                <span className="font-mono">฿ {fmtMoney(bill.common_fee)}</span>
+                            </div>
+                        )}
                         {Number(bill.other_cost) > 0 && (
                             <div className="flex justify-between">
                                 <span className="text-ink-3">ค่าอื่น ๆ</span>

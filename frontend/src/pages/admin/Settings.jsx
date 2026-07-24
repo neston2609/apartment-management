@@ -139,6 +139,30 @@ export default function Settings() {
                            onChange={(v) => setForm({ ...form, electricity_max_units: parseInt(v, 10) || 0 })} />
                 </div>
 
+                {/* Common-area electricity fee */}
+                <div className="border-t border-[color:var(--border)] pt-3 mt-2">
+                    <h3 className="font-display text-sm font-bold text-ink mb-2">ค่าบริการไฟส่วนกลาง</h3>
+
+                    <label className="flex items-center gap-2 mb-3 cursor-pointer select-none">
+                        <input type="checkbox"
+                               className="h-4 w-4 accent-brand-600"
+                               checked={form.common_fee_enabled === true}
+                               onChange={(e) => setForm({ ...form, common_fee_enabled: e.target.checked })} />
+                        <span className="text-ink-2 font-semibold">เปิดเก็บค่าบริการไฟส่วนกลาง</span>
+                    </label>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <Field label="ราคาต่อหน่วยไฟฟ้า (บาท/หน่วย)" type="number" step="0.01" min={0}
+                               disabled={form.common_fee_enabled !== true}
+                               value={form.common_fee_per_unit ?? 0}
+                               onChange={(v) => setForm({ ...form, common_fee_per_unit: parseFloat(v) || 0 })} />
+                    </div>
+                    <span className="text-xs text-ink-3 mt-1 block">
+                        คิดจากจำนวนหน่วยไฟฟ้าที่ห้องใช้ (เช่น 2 บาท/หน่วย × 200 หน่วย = 400 บาท)
+                        {form.common_fee_enabled !== true && ' — ปิดอยู่: จะไม่คิดและไม่แสดงในบิล'}
+                    </span>
+                </div>
+
                 {/* Payment & Late Fee */}
                 <div className="border-t border-[color:var(--border)] pt-3 mt-2">
                     <h3 className="font-display text-sm font-bold text-ink mb-2">การชำระเงิน &amp; ค่าปรับ</h3>
