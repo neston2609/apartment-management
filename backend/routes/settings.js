@@ -125,6 +125,43 @@ router.put('/:apartment_id', fullAdmin, async (req, res) => {
              (bank_account_name || '').trim()]
         );
         const row = rows[0];
+
+        // Retroactively apply the common-area fee to EXISTING bills so past
+        // bills follow the current on/off state and rate:
+        //   enabled  -> common_fee = rate × electricity_usage (shown on bill)
+        //   disabled -> common_fee = 0                        (hidden on bill)
+        // electricity_usage is recomputed from each bill's meter reading
+        // (respecting rollover); total_cost is rebuilt from the stored
+        // water/electricity/rent/other components + the new common_fee.
+        const emax    = Number(row.electricity_max_units) || 9999;
+        const rate    = Number(row.common_fee_per_unit) || 0;
+        const enabled = row.common_fee_enabled === true;
+        await db.query(
+            `UPDATE bills b
+                SET common_fee = nc.new_common,
+                    total_cost = b.water_cost + b.electricity_cost + b.rent_cost
+                                 + b.other_cost + nc.new_common,
+                    updated_at = NOW()
+               FROM (
+                 SELECT b2.bill_id,
+                        CASE WHEN $2 THEN ROUND(
+                          (CASE WHEN COALESCE(m.rollover_electricity, FALSE)
+                                THEN ($3::numeric - COALESCE(m.electricity_units_last, 0))
+                                     + COALESCE(m.electricity_units_current, 0)
+                                ELSE COALESCE(m.electricity_units_current, 0)
+                                     - COALESCE(m.electricity_units_last, 0)
+                           END) * $4::numeric, 2)
+                        ELSE 0 END AS new_common
+                   FROM bills b2
+                   JOIN rooms r ON r.room_id = b2.room_id
+                   LEFT JOIN meter_readings m
+                     ON m.room_id = b2.room_id AND m.month = b2.month AND m.year = b2.year
+                  WHERE r.apartment_id = $1
+               ) nc
+              WHERE b.bill_id = nc.bill_id`,
+            [id, enabled, emax, rate]
+        );
+
         row.qr_code_url = qrUrl(req, row.qr_code_path);
         return res.json({ data: row });
     } catch (err) {
