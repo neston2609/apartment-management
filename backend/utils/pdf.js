@@ -312,8 +312,149 @@ function drawInvoiceEnglish(doc, b) {
     doc.fillColor('black');
 }
 
+// =====================================================
+// Compact single invoice "copy" drawn inside a vertical band starting at
+// `top`. Used for the A4 portrait two-copy layout (tenant + owner copies on
+// one page). Handles both Thai and English. Ends with two signature lines:
+// ผู้เช่าห้อง (tenant) and ผู้รับเงิน (payment receiver).
+// =====================================================
+function drawInvoiceCopy(doc, b, top, copyLabel, lang) {
+    const th       = lang !== 'en';
+    const fontReg  = th ? 'thai' : 'reg';
+    const fontBold = th ? 'thai-bold' : 'bold';
+    const M        = 28;
+    const pageW    = doc.page.width;
+    const usableW  = pageW - M * 2;
+    const BLUE     = '#0000ff';
+    const WHITE    = '#ffffff';
+
+    const mmPadded = String(b.month).padStart(2, '0');
+    const billNo   = `${b.year}${mmPadded}${b.room_number || ''}`;
+    let y = top;
+
+    // Copy label (left) + bill number (right)
+    doc.font(fontReg).fontSize(9).fillColor('#64748b')
+       .text(copyLabel, M, y, { width: usableW / 2, align: 'left' });
+    doc.fillColor('black').fontSize(10)
+       .text(`${th ? 'บิลเลขที่' : 'Invoice #'}  ${billNo}`, M, y, { width: usableW, align: 'right' });
+    y += 16;
+
+    const aptHeader = [b.apartment_name, b.apartment_address].filter(Boolean).join(' ');
+    doc.font(fontBold).fontSize(13).text(aptHeader, M, y, { width: usableW, align: 'center' });
+    y += 17;
+    doc.font(fontReg).fontSize(10).text(
+        th ? `บิลเรียกเก็บเงินค่าเช่าห้อง ประจำเดือน ${mmPadded} ${b.year}`
+           : `Rent invoice for ${ENGLISH_MONTHS[b.month - 1]} ${b.year}`,
+        M, y, { width: usableW, align: 'center' });
+    y += 15;
+    doc.text(`${th ? 'ห้อง :' : 'Room :'}  ${b.room_number || '-'}`,
+             M, y, { width: usableW, align: 'right' });
+    y += 15;
+
+    const cols = th ? [
+        { key: 'label',  title: '',               w: 0.20, align: 'center' },
+        { key: 'last',   title: 'จดเดือนที่แล้ว', w: 0.13, align: 'center' },
+        { key: 'cur',    title: 'จดเดือนนี้',     w: 0.13, align: 'center' },
+        { key: 'units',  title: 'จำนวนหน่วย',    w: 0.13, align: 'center' },
+        { key: 'rate',   title: 'ราคาต่อหน่วย',  w: 0.13, align: 'center' },
+        { key: 'amount', title: 'รวม (บาท)',      w: 0.28, align: 'center' },
+    ] : [
+        { key: 'label',  title: '',             w: 0.20, align: 'center' },
+        { key: 'last',   title: 'Prev meter',   w: 0.13, align: 'center' },
+        { key: 'cur',    title: 'Current',      w: 0.13, align: 'center' },
+        { key: 'units',  title: 'Units',        w: 0.13, align: 'center' },
+        { key: 'rate',   title: 'Rate',         w: 0.13, align: 'center' },
+        { key: 'amount', title: 'Amount (THB)', w: 0.28, align: 'center' },
+    ];
+    let xCursor = M;
+    const colXs = cols.map((c) => { const px = usableW * c.w; const o = { ...c, x: xCursor, px }; xCursor += px; return o; });
+
+    const wUsage = b.rollover_water
+        ? (Number(b.water_max_units || 9999) - Number(b.water_units_last)) + Number(b.water_units_current)
+        : Number(b.water_units_current) - Number(b.water_units_last);
+    const eUsage = b.rollover_electricity
+        ? (Number(b.electricity_max_units || 9999) - Number(b.electricity_units_last)) + Number(b.electricity_units_current)
+        : Number(b.electricity_units_current) - Number(b.electricity_units_last);
+
+    const dataRows = [
+        { label: th ? 'ค่าน้ำ' : 'Water', last: intStr(b.water_units_last), cur: intStr(b.water_units_current),
+          units: intStr(wUsage), rate: intStr(b.water_price_per_unit), amount: intStr(b.water_cost) },
+        { label: th ? 'ค่าไฟ' : 'Electricity', last: intStr(b.electricity_units_last), cur: intStr(b.electricity_units_current),
+          units: intStr(eUsage), rate: intStr(b.electricity_price_per_unit), amount: intStr(b.electricity_cost) },
+        { label: th ? 'ค่าเช่าห้อง' : 'Room rent', last: '', cur: '', units: '', rate: '', amount: intStr(b.rent_cost) },
+    ];
+    if (Number(b.common_fee) > 0) {
+        dataRows.push({ label: th ? 'ค่าบริการไฟส่วนกลาง' : 'Common area', last: '', cur: '', units: '', rate: '',
+                        amount: intStr(b.common_fee) });
+    }
+    dataRows.push({ label: th ? 'ค่าโทรศัพท์ และอื่นๆ' : 'Other', last: '', cur: '', units: '', rate: '', amount: intStr(b.other_cost) });
+
+    const headerH = 20;
+    doc.rect(M, y, usableW, headerH).fillColor(BLUE).fill();
+    doc.fillColor(WHITE).font(fontReg).fontSize(10);
+    colXs.forEach((c) => doc.text(c.title, c.x + 4, y + 5, { width: c.px - 8, align: c.align }));
+    y += headerH;
+
+    const rowH = 20;
+    doc.fillColor('black').font(fontReg).fontSize(10);
+    dataRows.forEach((r) => {
+        colXs.forEach((c) => doc.text(String(r[c.key] ?? ''), c.x + 4, y + 5, { width: c.px - 8, align: c.align }));
+        y += rowH;
+        doc.moveTo(M, y).lineTo(M + usableW, y).strokeColor('#cccccc').stroke();
+    });
+
+    const totalH = 22;
+    doc.rect(M, y, usableW, totalH).fillColor(BLUE).fill();
+    doc.fillColor(WHITE).font(fontBold).fontSize(12);
+    const labelW = colXs.slice(0, 5).reduce((s, c) => s + c.px, 0);
+    doc.text(th ? 'รวมค่าเช่า' : 'TOTAL', M + 4, y + 6, { width: labelW - 8, align: 'right' });
+    doc.text(intStr(b.total_cost), colXs[5].x + 4, y + 6, { width: colXs[5].px - 8, align: 'center' });
+    y += totalH;
+
+    if (b.invoice_footer_text) {
+        doc.fillColor('#475569').font(fontReg).fontSize(9)
+           .text(b.invoice_footer_text, M, y + 8, { width: usableW, align: 'left' });
+        y = doc.y;
+    }
+
+    // Signature lines: tenant + payment receiver
+    y += 26;
+    const half = usableW / 2;
+    const tenantSig = th ? 'ลงชื่อ ............................. ผู้เช่าห้อง' : 'Sign ............................. Tenant';
+    const payeeSig  = th ? 'ลงชื่อ ............................. ผู้รับเงิน'  : 'Sign ............................. Receiver';
+    doc.fillColor('black').font(fontReg).fontSize(10);
+    doc.text(tenantSig, M, y, { width: half - 6, align: 'left' });
+    doc.text(payeeSig,  M + half, y, { width: half - 6, align: 'left' });
+    doc.fillColor('black');
+}
+
+// A4 portrait: two copies (tenant + owner) on one page, split by a dashed
+// cut line in the middle.
+function drawInvoiceA4TwoCopy(doc, b, lang) {
+    const th    = lang !== 'en';
+    const M     = 28;
+    const pageW = doc.page.width;
+    const pageH = doc.page.height;
+    const mid   = pageH / 2;
+
+    drawInvoiceCopy(doc, b, M, th ? 'ส่วนของผู้เช่า' : "Tenant's copy", lang);
+
+    // Dashed cut line across the middle
+    doc.save();
+    doc.dash(5, { space: 3 }).moveTo(M, mid).lineTo(pageW - M, mid)
+       .strokeColor('#94a3b8').lineWidth(0.8).stroke().undash();
+    doc.restore();
+    doc.font(th ? 'thai' : 'reg').fontSize(8).fillColor('#94a3b8')
+       .text(th ? '— ตัดตามรอยประ —' : '— cut here —', M, mid - 11, { width: pageW - M * 2, align: 'center' });
+    doc.fillColor('black');
+
+    drawInvoiceCopy(doc, b, mid + 16, th ? 'ส่วนของเจ้าของหอ' : "Owner's copy", lang);
+}
+
+// A4 = portrait (two-copy layout); A5 = landscape (single copy).
 function pageOpts(size) {
-    return { size: size === 'A4' ? 'A4' : 'A5', layout: 'landscape', margin: 28 };
+    if (size === 'A4') return { size: 'A4', layout: 'portrait', margin: 28 };
+    return { size: 'A5', layout: 'landscape', margin: 28 };
 }
 
 // ===== Single bill — Thai or English =====
@@ -321,7 +462,8 @@ function generateInvoicePDF(b, size, stream) {
     const doc = new PDFDocument(pageOpts(size));
     applyFonts(doc);
     doc.pipe(stream);
-    drawInvoiceThai(doc, b);
+    if (size === 'A4') drawInvoiceA4TwoCopy(doc, b, 'th');
+    else               drawInvoiceThai(doc, b);
     doc.end();
 }
 
@@ -329,7 +471,8 @@ function generateInvoicePDFEnglish(b, size, stream) {
     const doc = new PDFDocument(pageOpts(size));
     applyFonts(doc);
     doc.pipe(stream);
-    drawInvoiceEnglish(doc, b);
+    if (size === 'A4') drawInvoiceA4TwoCopy(doc, b, 'en');
+    else               drawInvoiceEnglish(doc, b);
     doc.end();
 }
 
@@ -340,10 +483,11 @@ function generateInvoicePDFBulk(bills, size, lang, stream) {
     applyFonts(doc);
     doc.pipe(stream);
 
-    const drawer = lang === 'en' ? drawInvoiceEnglish : drawInvoiceThai;
+    const drawA5 = lang === 'en' ? drawInvoiceEnglish : drawInvoiceThai;
     bills.forEach((b, i) => {
         if (i > 0) doc.addPage(opts);
-        drawer(doc, b);
+        if (size === 'A4') drawInvoiceA4TwoCopy(doc, b, lang);
+        else               drawA5(doc, b);
     });
     doc.end();
 }
